@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Toast Time</string>
+    <string name="title_activity_main">Toast Time</string>
+    <string name="package_name">com.toasttime.game</string>
+    <string name="custom_url_scheme">com.toasttime.game</string>
+</resources>

@@ -1,0 +1,10 @@
+{
+  "appId": "com.toasttime.game",
+  "appName": "Toast Time",
+  "webDir": "dist",
+  "backgroundColor": "#1b120c",
+  "android": {
+    "backgroundColor": "#1b120c",
+    "allowMixedContent": false
+  }
+}
