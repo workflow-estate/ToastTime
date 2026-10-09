@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { resolveCircle } from './collision.js';
 import { yawFromDir } from './util.js';
 
+const ICE = new THREE.Color('#8ecfff');
+const CHAR = new THREE.Color('#3a140c');
+
 function metal(color, extras = {}) {
   return new THREE.MeshStandardMaterial({
     color,
@@ -115,7 +118,88 @@ export function createBoss(scene, x, z) {
     chargeZ: 0,
     meteors: [],
     meteorSpawned: false,
+    mats: collectMats(group),
+    scorch: 0,
+    chill: 0,
+    chilled: false,
   };
+}
+
+function collectMats(group) {
+  const mats = [];
+  group.traverse((obj) => {
+    if (!obj.isMesh || !obj.material || !obj.material.color) return;
+    const m = obj.material;
+    if (!m.userData.baseColor) {
+      m.userData.baseColor = m.color.clone();
+      m.userData.baseEmissive = m.emissive ? m.emissive.clone() : new THREE.Color(0x000000);
+      m.userData.baseIntensity = m.emissiveIntensity || 0;
+    }
+    if (!mats.includes(m)) mats.push(m);
+  });
+  return mats;
+}
+
+function restoreMats(boss) {
+  boss.mats.forEach((m) => {
+    m.color.copy(m.userData.baseColor);
+    if (m.emissive) {
+      m.emissive.copy(m.userData.baseEmissive);
+      m.emissiveIntensity = m.userData.baseIntensity;
+    }
+  });
+}
+
+function paintBoss(boss, dt, time) {
+  if (boss.scorch > 0) {
+    boss.scorch -= dt;
+    const t = Math.max(0, boss.scorch / 0.55);
+    const hit = Math.sin((1 - t) * Math.PI);
+    boss.group.rotation.x = -0.32 * hit;
+    boss.group.rotation.z = Math.sin(boss.scorch * 58) * 0.1 * t;
+    boss.group.position.y += 0.22 * hit;
+    boss.group.scale.set(1 + 0.06 * hit, 1 - 0.12 * hit, 1 + 0.06 * hit);
+    boss.mats.forEach((m) => {
+      if (t > 0.55) {
+        m.color.set('#ff6a1a');
+        if (m.emissive) {
+          m.emissive.set('#ff3a00');
+          m.emissiveIntensity = 1.1;
+        }
+      } else {
+        m.color.copy(m.userData.baseColor).lerp(CHAR, 0.72);
+        if (m.emissive) {
+          m.emissive.set('#5a1a08');
+          m.emissiveIntensity = 0.5;
+        }
+      }
+    });
+    if (boss.scorch <= 0) {
+      boss.group.rotation.x = 0;
+      boss.group.rotation.z = 0;
+      boss.group.scale.setScalar(1);
+      restoreMats(boss);
+    }
+    return;
+  }
+  boss.group.rotation.x = 0;
+  const step = (boss.freezeOn ? 0.42 : 0.55) * dt;
+  boss.chill = boss.freezeOn ? Math.min(1, boss.chill + step) : Math.max(0, boss.chill - step);
+  if (boss.chill > 0) {
+    boss.chilled = true;
+    boss.group.rotation.z = Math.sin(time * 14) * 0.045 * boss.chill;
+    boss.mats.forEach((m) => {
+      m.color.copy(m.userData.baseColor).lerp(ICE, boss.chill * 0.88);
+      if (m.emissive) {
+        m.emissive.set('#c6f4ff');
+        m.emissiveIntensity = m.userData.baseIntensity + boss.chill * 0.45;
+      }
+    });
+  } else if (boss.chilled) {
+    boss.chilled = false;
+    boss.group.rotation.z = 0;
+    restoreMats(boss);
+  }
 }
 
 const meteorGeo = new THREE.DodecahedronGeometry(0.42, 0);
@@ -287,17 +371,22 @@ export function updateBoss(boss, dt, ctx) {
   boss.z = pos.z;
   boss.group.position.set(boss.x, boss.y, boss.z);
   boss.group.rotation.y = boss.yaw;
-  boss.slotMat.emissiveIntensity = 0.7 + Math.sin(ctx.time * 6) * 0.25;
+  boss.freezeOn = Boolean(ctx.frozen);
+  if (boss.scorch <= 0 && boss.chill <= 0) {
+    boss.slotMat.emissiveIntensity = 0.7 + Math.sin(ctx.time * 6) * 0.25;
+  }
+  paintBoss(boss, dt, ctx.time);
 
   if (boss.mode === 'chase' && dist < boss.radius + 0.5) {
     ctx.onTouch(16, boss);
   }
 }
 
-export function hurtBoss(boss, amount, fromX, fromZ) {
+export function hurtBoss(boss, amount, fromX, fromZ, burn = false) {
   if (boss.dead || boss.dying > 0 || boss.mode === 'enter' || boss.hurtCd > 0) return false;
   boss.hp -= amount;
   boss.hurtCd = 0.12;
+  if (burn) boss.scorch = 0.55;
   const dx = boss.x - fromX;
   const dz = boss.z - fromZ;
   const d = Math.hypot(dx, dz) || 1;

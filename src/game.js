@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import * as THREE from 'three';
-import { buildMap, buildThemedArena, getMapMeta } from './maps.js';
+import { buildMap, getMapMeta } from './maps.js';
 import { createToastActor, createOrbitRig } from './toast.js';
 import { createEnemy, updateEnemy, hurtEnemy } from './enemies.js';
 import { createBoss, updateBoss, hurtBoss, createCrumbShot } from './boss.js';
@@ -10,7 +10,7 @@ import { resolveCircle, findClearPoint, segmentHits } from './collision.js';
 import { getRunStats, getActivePower } from './save.js';
 import { readMove, shiftDown } from './input.js';
 import { clamp, formatTime, lerpAngle, yawFromDir, forwardFromYaw } from './util.js';
-import { sfx } from './audio.js';
+import { sfx, startBossMusic, stopBossMusic } from './audio.js';
 
 const MAIN_POWERS = ['orbit', 'speed', 'shield', 'heal'];
 
@@ -68,7 +68,7 @@ export function createGame(hooks) {
     if (effects) effects.clear();
     if (world) {
       world.scene.traverse((obj) => {
-        if (obj.geometry) obj.geometry.dispose();
+        if (obj.geometry && !obj.geometry.userData?.shared) obj.geometry.dispose();
         if (obj.material) {
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
           mats.forEach((m) => {
@@ -140,7 +140,7 @@ export function createGame(hooks) {
     boss = null;
     ['orbit', 'shield', 'speed', 'heal'].forEach((type, i) => spawnPower(type, true, i));
     howTo = !custom;
-    if (!howTo) setBanner(custom ? 'CUSTOM WORLD' : mapName, 2.2);
+    if (!howTo) setBanner(mapName, 2.2);
   }
 
   function dismissHowTo() {
@@ -213,6 +213,7 @@ export function createGame(hooks) {
     if (hp <= 0) {
       hp = 0;
       phase = 'dead';
+      stopBossMusic();
       sfx.lose();
       hooks.onScore(score);
       setBanner('YOU GOT TOASTED!', 6);
@@ -292,6 +293,7 @@ export function createGame(hooks) {
     const sz = span > 400 ? pz - 10 : world.spawn.z - 8;
     const spot = findClearPoint(sx, sz, 1.3, world.colliders, world.bounds) || { x: 0, z: 0 };
     boss = createBoss(world.scene, spot.x, spot.z);
+    startBossMusic();
     setBanner('THE BOSS TOASTER!', 2.4);
     shake = 0.35;
   }
@@ -327,7 +329,7 @@ export function createGame(hooks) {
       if (enemy.dead || enemy.dying > 0) return;
       if ((enemy.burnHit || 0) > 0 || !inFront(enemy.x, enemy.z, 3.5, 0.45)) return;
       enemy.burnHit = 0.55;
-      if (hurtEnemy(enemy, 8, px, pz)) {
+      if (hurtEnemy(enemy, 8, px, pz, true)) {
         enemy.knockX *= 0.2;
         enemy.knockZ *= 0.2;
         effects.burst({ x: enemy.x, y: 1, z: enemy.z }, '#ff7a2a', 8, 2.2);
@@ -335,7 +337,7 @@ export function createGame(hooks) {
     });
     if (boss && !boss.dead && (boss.burnHit || 0) <= 0 && inFront(boss.x, boss.z, 4.2, 0.35)) {
       boss.burnHit = 0.55;
-      if (hurtBoss(boss, 14, px, pz)) effects.burst({ x: boss.x, y: 1.4, z: boss.z }, '#ff7a2a', 10, 2.4);
+      if (hurtBoss(boss, 14, px, pz, true)) effects.burst({ x: boss.x, y: 1.4, z: boss.z }, '#ff7a2a', 10, 2.4);
     }
   }
 
@@ -463,6 +465,7 @@ export function createGame(hooks) {
             if (victorySent) return;
             victorySent = true;
             phase = 'won';
+            stopBossMusic();
             score += 500;
             hooks.onScore(score);
             hooks.onVictory();
@@ -617,6 +620,8 @@ export function createGame(hooks) {
             enemy.actor.group.scale.setScalar(1);
             enemy.actor.group.rotation.z = 0;
             enemy.actor.group.position.set(spot.x, 0, spot.z);
+            enemy.actor.setHealth(enemy.hp, enemy.maxHp);
+            enemy.actor.setChill(false, 10);
           } else {
             enemy.respawn = 1;
           }
@@ -867,11 +872,11 @@ export function createGame(hooks) {
       boot(built, { mapName: getMapMeta(mapId).name, custom: false });
     },
     startCustom(customWorld) {
-      const built = buildThemedArena(customWorld.floor || 'park', 18);
+      const built = buildMap(customWorld.floor || 'park');
       built.coins = (customWorld.coins || []).map((c) => ({ x: c.x, z: c.z }));
       built.enemies = (customWorld.enemies || []).map((c) => ({ x: c.x, z: c.z }));
-      built.spawn = { x: 0, z: 0, yaw: 0 };
-      boot(built, { mapName: 'CUSTOM WORLD', custom: true });
+      built.spawn = { x: 4, z: 6, yaw: Math.PI };
+      boot(built, { mapName: customWorld.name || 'CUSTOM WORLD', custom: true });
     },
     dispose: disposeWorld,
   };

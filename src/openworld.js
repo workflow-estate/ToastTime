@@ -38,6 +38,10 @@ const bladeGeo = makeBlade();
 const leafGeo = makeLeaf();
 const trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 1.35, 6);
 const wheelGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.22, 8);
+bladeGeo.userData.shared = true;
+leafGeo.userData.shared = true;
+trunkGeo.userData.shared = true;
+wheelGeo.userData.shared = true;
 const dummy = new THREE.Object3D();
 
 function pushBlade(positions, uvs, colors, yaw, w, h, lift) {

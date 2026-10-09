@@ -1,9 +1,12 @@
 import themeUrl from './assets/toast-time-theme.mp3';
+import bossUrl from './assets/toast-time-boss.mp3';
 
 let ctx = null;
 let master = null;
 let unlocked = false;
 let theme = null;
+let bossTheme = null;
+let bossOn = false;
 
 function context() {
   if (!ctx) {
@@ -24,7 +27,31 @@ function startTheme() {
     theme.volume = 0.55;
     theme.preload = 'auto';
   }
+  if (bossOn) return;
   if (theme.paused) theme.play().catch(() => {});
+}
+
+export function startBossMusic() {
+  bossOn = true;
+  if (!unlocked) unlockAudio();
+  if (!bossTheme) {
+    bossTheme = new Audio(bossUrl);
+    bossTheme.loop = true;
+    bossTheme.volume = 0.62;
+    bossTheme.preload = 'auto';
+  }
+  if (theme && !theme.paused) theme.pause();
+  bossTheme.currentTime = 0;
+  bossTheme.play().catch(() => {});
+}
+
+export function stopBossMusic() {
+  bossOn = false;
+  if (bossTheme) {
+    bossTheme.pause();
+    bossTheme.currentTime = 0;
+  }
+  if (unlocked) startTheme();
 }
 
 export function unlockAudio() {

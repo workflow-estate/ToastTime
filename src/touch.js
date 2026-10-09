@@ -1,10 +1,11 @@
+import { Capacitor } from '@capacitor/core';
 import { getSave, ownsSkin } from './save.js';
 import { getSkin } from './skins.js';
 
 const ACTIVE = new Set(['play', 'soccer', 'party', 'editor']);
 
 export function wantsTouch() {
-  return true;
+  return Capacitor.isNativePlatform();
 }
 
 export function createTouch(input, { onLook, onUnlock }) {

@@ -86,7 +86,7 @@ export function createUI(root, api) {
       hud.score.textContent = `Score ${data.score}`;
       hud.hp.textContent = `${data.hp} / ${data.maxHp}`;
       hud.fill.style.width = `${Math.max(0, Math.min(100, (data.hp / data.maxHp) * 100))}%`;
-      const label = data.custom ? 'CUSTOM WORLD' : data.mapName;
+      const label = data.mapName || 'CUSTOM WORLD';
       hud.coins.textContent = `${label} · Coins ${data.coins} · Left ${data.left}`;
       hud.powers.textContent = data.powers || '';
       hud.banner.textContent = data.banner || '';
@@ -159,6 +159,7 @@ const templates = {
             <button class="game-btn alt" type="button" data-act="shop">🛒 UPGRADES SHOP</button>
             <button class="game-btn alt" type="button" data-act="minigames">⚽ MINIGAMES</button>
             <button class="game-btn alt" type="button" data-act="editor">🛠️ EDIT WORLD</button>
+            <button class="game-btn alt" type="button" data-act="saved-worlds">🌍 SAVED WORLDS</button>
             <button class="game-btn party" type="button" data-act="party">🎉 PARTY</button>
             <button class="game-btn alt" type="button" data-act="settings">⚙️ SETTINGS</button>
           </div>
@@ -363,21 +364,53 @@ const templates = {
         <button class="hud-exit" type="button" data-act="menu">MENU</button>
       </div>`;
   },
-  editor() {
+  savedWorlds() {
+    const worlds = getSave().savedWorlds || [];
+    const cards = worlds.length
+      ? worlds.map((world) => {
+        const floor = FLOORS.find((item) => item.id === world.floor);
+        return `
+          <article class="card">
+            <h3>${escapeHtml(world.name)}</h3>
+            <p>${floor ? floor.name : 'TOASTY GRASS'}<br>${world.coins.length} COINS · ${world.enemies.length} ENEMIES</p>
+            <button class="game-btn wide" type="button" data-act="play-saved" data-id="${escapeHtml(world.id)}">PLAY</button>
+          </article>`;
+      }).join('')
+      : '<p class="lede">No saved worlds yet. Edit a world and press SAVE.</p>';
+    return shell('SAVED WORLDS', 'Play any world you saved from the editor.', `<div class="grid">${cards}</div>`);
+  },
+  editor(data = {}) {
+    const dialog = data.confirm ? `
+      <div class="modal-back">
+        <div class="modal">
+          <h2>ARE YOU SURE?</h2>
+          <p>are you sure? all progress will be lost!</p>
+          <div class="stack">
+            <button class="game-btn danger" type="button" data-act="exit-editor-yes">YES, EXIT</button>
+            <button class="game-btn good" type="button" data-act="exit-editor-no">NO, KEEP EDITING</button>
+          </div>
+        </div>
+      </div>` : '';
+    const note = data.message ? `<p class="lede">${escapeHtml(data.message)}</p>` : '';
     return `
       <aside class="tool-panel">
         <h2>EDIT WORLD</h2>
-        <p class="lede">${onTouch() ? 'DRAG THE STICK TO MOVE. Objects appear in front of your Toast.' : 'WASD / ARROWS MOVE. Objects appear in front of your Toast.'}</p>
+        <p class="lede">${onTouch() ? 'DRAG THE STICK TO MOVE. The grass keeps going. Objects appear in front of your Toast.' : 'WASD / ARROWS MOVE. The grass keeps going. Objects appear in front of your Toast.'}</p>
+        <label class="field">WORLD NAME
+          <input id="world-name" maxlength="24" value="${escapeHtml(data.name || 'MY WORLD')}" />
+        </label>
+        ${note}
         <div class="stack">
           <button class="game-btn alt" type="button" data-act="choose-floor">CHOOSE FLOOR</button>
           <button class="game-btn" type="button" data-act="spawn-enemy">SPAWN ENEMY</button>
           <button class="game-btn" type="button" data-act="spawn-coin">SPAWN COIN</button>
           <button class="game-btn alt" type="button" data-act="remove-last">REMOVE LAST</button>
+          <button class="game-btn good" type="button" data-act="save-world">SAVE</button>
           <button class="game-btn good" type="button" data-act="save-play">SAVE & PLAY</button>
           <button class="game-btn danger" type="button" data-act="exit-editor">EXIT</button>
         </div>
         <p id="editor-counts">Coins 0 · Enemies 0</p>
-      </aside>`;
+      </aside>${dialog}`;
   },
   gameover(data) {
     return resultCard('YOU GOT TOASTED!', 'The crumbs have claimed another hero.', data, 'play-again');

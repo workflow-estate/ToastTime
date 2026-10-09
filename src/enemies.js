@@ -1,10 +1,12 @@
-import { createToastActor } from './toast.js';
+import { attachHealthBar, createToastActor } from './toast.js';
 import { resolveCircle } from './collision.js';
 import { yawFromDir } from './util.js';
 
 export function createEnemy(scene, x, z) {
   const actor = createToastActor('classic', { angry: true });
   actor.group.position.set(x, 0, z);
+  attachHealthBar(actor);
+  actor.setHealth(48, 48);
   scene.add(actor.group);
   return {
     actor,
@@ -62,6 +64,7 @@ export function updateEnemy(enemy, dt, ctx) {
   enemy.actor.group.position.z = enemy.z;
   enemy.actor.group.rotation.y = enemy.yaw;
   enemy.actor.setMoving(speed > 0.4 && !ctx.frozen);
+  enemy.actor.setChill(Boolean(ctx.frozen), dt);
   enemy.actor.update(dt);
   if (dist < 1.18 && enemy.attackCd <= 0 && !ctx.frozen) {
     enemy.attackCd = 1.25;
@@ -70,12 +73,16 @@ export function updateEnemy(enemy, dt, ctx) {
   }
 }
 
-export function hurtEnemy(enemy, amount, fromX, fromZ) {
+export function hurtEnemy(enemy, amount, fromX, fromZ, burn = false) {
   if (enemy.dead || enemy.dying > 0) return false;
   enemy.hp -= amount;
   enemy.hurtCd = 0.12;
-  enemy.actor.flash();
-  enemy.actor.triggerHop(0.28);
+  if (burn) enemy.actor.scorch();
+  else {
+    enemy.actor.flash();
+    enemy.actor.triggerHop(0.28);
+  }
+  enemy.actor.setHealth(enemy.hp, enemy.maxHp);
   const dx = enemy.x - fromX;
   const dz = enemy.z - fromZ;
   const d = Math.hypot(dx, dz) || 1;

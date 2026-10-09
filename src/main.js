@@ -8,7 +8,7 @@ import { createGame } from './game.js';
 import { createSoccer } from './soccer.js';
 import { createParty } from './party.js';
 import { createEditor } from './editor.js';
-import { unlockAudio, sfx } from './audio.js';
+import { unlockAudio, sfx, stopBossMusic } from './audio.js';
 import {
   loadSave,
   getSave,
@@ -20,7 +20,8 @@ import {
   setSelectedSkin,
   tryUnlockSkin,
   buyUpgrade,
-  setCustomWorld,
+  saveEditedWorld,
+  getSavedWorlds,
   markTutorialSeen,
   resetProgress,
   sanitizeUsername,
@@ -49,8 +50,11 @@ const touch = createTouch(input, {
 });
 const uiRoot = document.getElementById('ui-root');
 let screen = 'menu';
-let pickedFloor = getSave().customWorld?.floor || 'park';
+let pickedFloor = 'park';
 let editorLive = false;
+let draftName = 'MY WORLD';
+let queuedWorld = null;
+let exitReturn = 'editor';
 let partyArena = 'colosseum';
 let runKind = 'campaign';
 let shopNote = '';
@@ -66,10 +70,7 @@ const game = createGame({
 });
 const soccer = createSoccer({ getSave });
 const party = createParty({ getSave });
-const editor = createEditor({
-  getSave,
-  setWorld: (world) => setCustomWorld(world),
-});
+const editor = createEditor({ getSave });
 
 let active = preview;
 
@@ -92,7 +93,29 @@ const ui = createUI(uiRoot, {
       return;
     }
     if (act === 'menu' || act === 'exit-editor') {
+      if (editorLive) {
+        exitReturn = screen === 'editorFloors' ? 'floors' : 'editor';
+        screen = 'editor';
+        ui.show('editor', { confirm: true, name: worldName() });
+        return;
+      }
       goMenu();
+      return;
+    }
+    if (act === 'exit-editor-yes') {
+      editorLive = false;
+      draftName = 'MY WORLD';
+      goMenu();
+      return;
+    }
+    if (act === 'exit-editor-no') {
+      if (exitReturn === 'floors') {
+        screen = 'editorFloors';
+        ui.show('editorFloors', { floor: pickedFloor });
+      } else {
+        screen = 'editor';
+        ui.show('editor', { name: draftName });
+      }
       return;
     }
     if (act === 'play') {
@@ -117,9 +140,11 @@ const ui = createUI(uiRoot, {
     if (act === 'party-arenas') return showPreview('partyArenas');
     if (act === 'editor') {
       editorLive = false;
-      pickedFloor = getSave().customWorld?.floor || 'park';
+      draftName = 'MY WORLD';
+      pickedFloor = 'park';
       return showPreview('editorFloors');
     }
+    if (act === 'saved-worlds') return showPreview('savedWorlds');
     if (act === 'select-map') {
       setSelectedMap(id);
       ui.show('maps');
@@ -171,16 +196,17 @@ const ui = createUI(uiRoot, {
       if (editorLive) {
         editor.setFloor(pickedFloor);
       } else {
-        editor.start(pickedFloor, getSave().customWorld);
+        editor.start(pickedFloor);
         active = editor;
       }
       editorLive = true;
       screen = 'editor';
-      ui.show('editor');
+      ui.show('editor', { name: draftName });
       return;
     }
     if (act === 'choose-floor') {
       editorLive = true;
+      worldName();
       pickedFloor = editor.snapshot().floor;
       screen = 'editorFloors';
       ui.show('editorFloors', { floor: pickedFloor });
@@ -189,10 +215,26 @@ const ui = createUI(uiRoot, {
     if (act === 'spawn-coin') return editor.spawn('coin');
     if (act === 'spawn-enemy') return editor.spawn('enemy');
     if (act === 'remove-last') return editor.removeLast();
-    if (act === 'save-play') {
-      const world = editor.snapshot();
-      setCustomWorld(world);
+    if (act === 'save-world' || act === 'save-play') {
+      const saved = storeDraft();
+      if (!saved) {
+        ui.show('editor', { message: 'COULD NOT SAVE', name: draftName });
+        return;
+      }
+      if (act === 'save-world') {
+        ui.show('editor', { message: 'SAVED', name: saved.name });
+        return;
+      }
+      queuedWorld = saved;
       editor.dispose();
+      editorLive = false;
+      beginRun('custom');
+      return;
+    }
+    if (act === 'play-saved') {
+      const found = getSavedWorlds().find((world) => world.id === id);
+      if (!found) return showPreview('savedWorlds');
+      queuedWorld = found;
       beginRun('custom');
       return;
     }
@@ -226,7 +268,22 @@ const ui = createUI(uiRoot, {
   },
 });
 
+function worldName() {
+  const field = uiRoot.querySelector('#world-name');
+  if (field) draftName = field.value;
+  return draftName;
+}
+
+function storeDraft() {
+  const saved = saveEditedWorld({ ...editor.snapshot(), name: worldName() });
+  if (!saved) return null;
+  editor.noteSaved(saved.id);
+  draftName = saved.name;
+  return saved;
+}
+
 function goMenu() {
+  stopBossMusic();
   game.dispose();
   soccer.dispose();
   party.dispose();
@@ -236,9 +293,10 @@ function goMenu() {
 }
 
 function beginRun(kind) {
+  stopBossMusic();
   leavePointer();
   runKind = kind;
-  if (kind === 'custom' && getSave().customWorld) game.startCustom(getSave().customWorld);
+  if (kind === 'custom' && queuedWorld) game.startCustom(queuedWorld);
   else {
     runKind = 'campaign';
     game.startCampaign(getSave().selectedMap);

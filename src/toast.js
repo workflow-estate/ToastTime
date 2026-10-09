@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { getSkin, ENEMY_SKIN } from './skins.js';
 
+const ICE = new THREE.Color('#8ecfff');
+
 function toastShape(w, h, topR, botR) {
   const s = new THREE.Shape();
   const hw = w / 2;
@@ -155,7 +157,7 @@ export function createToastActor(skinId, options = {}) {
     }
   });
 
-  const anim = { time: 0, moving: false, attack: 0, flash: 0, hop: 0, blocking: false, blend: 0 };
+  const anim = { time: 0, moving: false, attack: 0, flash: 0, hop: 0, scorch: 0, chill: 0, chilled: false, blocking: false, blend: 0 };
   const baseMats = [];
   group.traverse((obj) => {
     if (obj.isMesh && obj.material && obj !== block) baseMats.push(obj.material);
@@ -170,6 +172,15 @@ export function createToastActor(skinId, options = {}) {
     triggerAttack() { anim.attack = 0.26; },
     triggerHop(amount = 0.35) { anim.hop = Math.max(anim.hop, amount); },
     flash() { anim.flash = 0.16; },
+    scorch() {
+      anim.scorch = 0.5;
+      anim.flash = 0;
+      anim.hop = Math.max(anim.hop, 0.2);
+    },
+    setChill(on, dt) {
+      const step = (on ? 0.42 : 0.55) * dt;
+      anim.chill = on ? Math.min(1, anim.chill + step) : Math.max(0, anim.chill - step);
+    },
     setBlock(on) {
       anim.blocking = on;
       block.visible = on;
@@ -218,9 +229,43 @@ export function createToastActor(skinId, options = {}) {
         if (!m.userData.baseEmissive) {
           m.userData.baseEmissive = m.emissive.clone();
           m.userData.baseIntensity = m.emissiveIntensity || 0;
+          m.userData.baseColor = m.color.clone();
         }
       });
-      if (anim.flash > 0) {
+      const restoreMats = () => {
+        baseMats.forEach((m) => {
+          m.emissive.copy(m.userData.baseEmissive);
+          m.emissiveIntensity = m.userData.baseIntensity;
+          m.color.copy(m.userData.baseColor);
+        });
+      };
+      if (anim.scorch > 0) {
+        anim.scorch -= dt;
+        const t = Math.max(0, anim.scorch / 0.5);
+        const hit = Math.sin((1 - t) * Math.PI);
+        model.rotation.x = -0.7 * hit;
+        model.rotation.z += Math.sin(anim.scorch * 62) * 0.16 * t;
+        model.position.y += 0.1 * hit;
+        model.scale.y = 1 - 0.16 * hit;
+        model.scale.x = 1 + 0.08 * hit;
+        model.scale.z = 1 + 0.08 * hit;
+        baseMats.forEach((m) => {
+          if (t > 0.55) {
+            m.color.set('#ff6a1a');
+            m.emissive.set('#ff3a00');
+            m.emissiveIntensity = 1;
+          } else {
+            m.color.copy(m.userData.baseColor).lerp(new THREE.Color('#3a140c'), 0.65);
+            m.emissive.set('#5a1a08');
+            m.emissiveIntensity = 0.4;
+          }
+        });
+        if (anim.scorch <= 0) {
+          model.scale.set(1, 1, 1);
+          model.rotation.x = 0.05 * w;
+          restoreMats();
+        }
+      } else if (anim.flash > 0) {
         anim.flash -= dt;
         const on = Math.sin(anim.flash * 80) > 0;
         baseMats.forEach((m) => {
@@ -232,15 +277,52 @@ export function createToastActor(skinId, options = {}) {
             m.emissiveIntensity = m.userData.baseIntensity;
           }
         });
-        if (anim.flash <= 0) {
-          baseMats.forEach((m) => {
-            m.emissive.copy(m.userData.baseEmissive);
-            m.emissiveIntensity = m.userData.baseIntensity;
-          });
-        }
+        if (anim.flash <= 0) restoreMats();
+      } else if (anim.chill > 0) {
+        anim.chilled = true;
+        const iced = anim.chill;
+        model.rotation.z += Math.sin(anim.time * 14) * 0.04 * iced;
+        baseMats.forEach((m) => {
+          m.color.copy(m.userData.baseColor).lerp(ICE, iced * 0.88);
+          m.emissive.set('#c6f4ff');
+          m.emissiveIntensity = m.userData.baseIntensity + iced * 0.4;
+        });
+      } else if (anim.chilled) {
+        anim.chilled = false;
+        restoreMats();
       }
     },
   };
+}
+
+export function attachHealthBar(actor) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 10;
+  const paint = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.userData.owned = true;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthWrite: false,
+  }));
+  sprite.position.y = 1.9;
+  sprite.scale.set(1.25, 0.2, 1);
+  sprite.renderOrder = 4;
+  actor.group.add(sprite);
+  actor.setHealth = (hp, maxHp) => {
+    const ratio = Math.max(0, Math.min(1, maxHp > 0 ? hp / maxHp : 0));
+    paint.clearRect(0, 0, 64, 10);
+    paint.fillStyle = '#2a140c';
+    paint.fillRect(0, 0, 64, 10);
+    paint.fillStyle = ratio > 0.55 ? '#6dff63' : ratio > 0.28 ? '#ffd15a' : '#ff4d3a';
+    paint.fillRect(2, 2, Math.max(0, 60 * ratio), 6);
+    tex.needsUpdate = true;
+    sprite.visible = hp > 0;
+  };
+  actor.setHealth(1, 1);
 }
 
 function addExtra(model, skin, angry) {

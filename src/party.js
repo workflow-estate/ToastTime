@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { dressScene, stdMat } from './lights.js';
 import { rockTexture, lavaTexture, metalTexture } from './textures.js';
-import { createToastActor, createOrbitRig } from './toast.js';
+import { attachHealthBar, createToastActor, createOrbitRig } from './toast.js';
 import { createEffects } from './effects.js';
 import { createPowerMesh, spinPickup, POWER_INFO } from './pickups.js';
 import { resolveCircle, keepInside } from './collision.js';
@@ -285,9 +285,11 @@ export function createParty(hooks) {
       const x = Math.cos(ang) * 5;
       const z = Math.sin(ang) * 5 - 1;
       actor.group.position.set(x, 0, z);
+      attachHealthBar(actor);
+      actor.setHealth(3, 3);
       arena.scene.add(actor.group);
       return {
-        actor, x, z, yaw: 0, hp: 3, attackCd: 0.5 + i * 0.15, dead: false, dying: 0, knockX: 0, knockZ: 0, orbitHit: 0,
+        actor, x, z, yaw: 0, hp: 3, maxHp: 3, attackCd: 0.5 + i * 0.15, dead: false, dying: 0, knockX: 0, knockZ: 0, orbitHit: 0,
       };
     });
     powers = [];
@@ -375,11 +377,15 @@ export function createParty(hooks) {
     void amount;
   }
 
-  function hurtAi(ai, fromX, fromZ) {
+  function hurtAi(ai, fromX, fromZ, burn = false) {
     if (ai.dead || ai.dying > 0) return;
     ai.hp -= 1;
-    ai.actor.flash();
-    ai.actor.triggerHop(0.3);
+    if (burn) ai.actor.scorch();
+    else {
+      ai.actor.flash();
+      ai.actor.triggerHop(0.3);
+    }
+    ai.actor.setHealth(ai.hp, ai.maxHp || 3);
     const dx = ai.x - fromX;
     const dz = ai.z - fromZ;
     const d = Math.hypot(dx, dz) || 1;
@@ -454,7 +460,7 @@ export function createParty(hooks) {
         if (ai.dead || ai.dying > 0 || (ai.burnHit || 0) > 0) return;
         if (!partyInFront(ai.x, ai.z)) return;
         ai.burnHit = 0.75;
-        hurtAi(ai, player.group.position.x, player.group.position.z);
+        hurtAi(ai, player.group.position.x, player.group.position.z, true);
         ai.knockX *= 0.25;
         ai.knockZ *= 0.25;
       });
@@ -583,6 +589,7 @@ export function createParty(hooks) {
         ai.actor.group.position.set(ai.x, 0, ai.z);
         ai.actor.group.rotation.y = yawFromDir(dx, dz);
         ai.actor.setMoving(!frozen);
+        ai.actor.setChill(nearChill, dt);
         ai.actor.update(dt);
         if (powerId === 'block' && shiftHeld) {
           const away = Math.hypot(ai.x - pos.x, ai.z - pos.z) || 0.001;

@@ -71,6 +71,7 @@ export function defaultSave() {
     },
     tutorialSeen: false,
     customWorld: null,
+    savedWorlds: [],
   };
 }
 
@@ -98,7 +99,40 @@ function sanitize(raw) {
     next.upgrades[def.id] = clampLevel(next.upgrades[def.id], def.max);
   }
   if (!next.customWorld || typeof next.customWorld !== 'object') next.customWorld = null;
+  next.savedWorlds = Array.isArray(raw.savedWorlds)
+    ? raw.savedWorlds.map((world, index) => cleanSavedWorld(world, index)).filter(Boolean)
+    : [];
+  if (next.savedWorlds.length === 0 && next.customWorld && worldHasPlaces(next.customWorld)) {
+    const legacy = cleanSavedWorld({ ...next.customWorld, name: 'MY WORLD', id: 'legacy-world' }, 0);
+    if (legacy) next.savedWorlds.push(legacy);
+  }
   return next;
+}
+
+function worldHasPlaces(world) {
+  return (Array.isArray(world.coins) && world.coins.length > 0)
+    || (Array.isArray(world.enemies) && world.enemies.length > 0);
+}
+
+function cleanPointList(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((point) => point && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.z)))
+    .map((point) => ({ x: Number(point.x), z: Number(point.z) }));
+}
+
+function cleanSavedWorld(raw, index) {
+  if (!raw || typeof raw !== 'object') return null;
+  const floor = ['park', 'fridge', 'volcano', 'space'].includes(raw.floor) ? raw.floor : 'park';
+  const name = String(raw.name || `WORLD ${index + 1}`).replace(/\s+/g, ' ').trim().slice(0, 24) || `WORLD ${index + 1}`;
+  const id = String(raw.id || `world-${index + 1}`).slice(0, 40);
+  return {
+    id,
+    name,
+    floor,
+    coins: cleanPointList(raw.coins),
+    enemies: cleanPointList(raw.enemies),
+  };
 }
 
 function clampLevel(value, max) {
@@ -230,6 +264,31 @@ export function buyUpgrade(id) {
 export function setCustomWorld(world) {
   state.customWorld = world;
   persist();
+}
+
+export function getSavedWorlds() {
+  return state.savedWorlds;
+}
+
+export function saveEditedWorld(world) {
+  const named = cleanSavedWorld({
+    ...world,
+    name: world.name,
+    id: world.id || `world-${Date.now()}`,
+  }, state.savedWorlds.length);
+  if (!named) return null;
+  const existing = state.savedWorlds.find((item) => item.id === named.id);
+  if (existing) {
+    existing.name = named.name;
+    existing.floor = named.floor;
+    existing.coins = named.coins;
+    existing.enemies = named.enemies;
+  } else {
+    state.savedWorlds.push(named);
+  }
+  state.customWorld = named;
+  persist();
+  return existing || named;
 }
 
 export function markTutorialSeen() {

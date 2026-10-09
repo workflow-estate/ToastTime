@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildThemedArena } from './maps.js';
+import { buildMap } from './maps.js';
 import { createToastActor } from './toast.js';
 import { createCoinMesh, updateCoin } from './pickups.js';
 import { createEnemy } from './enemies.js';
@@ -22,6 +22,7 @@ export function createEditor(hooks) {
   let enemies = [];
   let placed = [];
   let floor = 'park';
+  let saveId = null;
   let camYaw = 0;
   let elapsed = 0;
   const forward = { x: 0, z: 1 };
@@ -38,13 +39,17 @@ export function createEditor(hooks) {
   function dispose() {
     if (!world) return;
     world.scene.traverse((obj) => {
-      if (obj.geometry) obj.geometry.dispose();
+      if (obj.geometry && !obj.geometry.userData?.shared) obj.geometry.dispose();
       if (obj.material) {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        mats.forEach((m) => m.dispose?.());
+        mats.forEach((m) => {
+          if (m.map && m.map.userData?.owned) m.map.dispose();
+          m.dispose?.();
+        });
       }
     });
     world = null;
+    player = null;
   }
 
   function addCoin(x, z, record = true) {
@@ -69,13 +74,14 @@ export function createEditor(hooks) {
   function boot(nextFloor, keep) {
     dispose();
     floor = nextFloor;
-    world = buildThemedArena(floor, 16);
-    camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 180);
+    world = buildMap(floor);
+    camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.12, 1200);
     const save = hooks.getSave();
     player = createToastActor(save.selectedSkin);
-    player.group.position.set(0, 0, 0);
+    player.group.position.set(world.spawn.x, 0, world.spawn.z);
+    player.group.rotation.y = world.spawn.yaw || 0;
     world.scene.add(player.group);
-    camYaw = 0;
+    camYaw = world.spawn.yaw || 0;
     coins = [];
     enemies = [];
     placed = [];
@@ -85,14 +91,11 @@ export function createEditor(hooks) {
 
   function snapshot() {
     return {
+      id: saveId,
       floor,
       coins: coins.map((c) => ({ x: c.x, z: c.z })),
       enemies: enemies.map((e) => ({ x: e.x, z: e.z })),
     };
-  }
-
-  function persist() {
-    hooks.setWorld(snapshot());
   }
 
   function spawn(kind) {
@@ -102,7 +105,6 @@ export function createEditor(hooks) {
     const z = player.group.position.z + forward.z * 2.5;
     if (kind === 'coin') addCoin(x, z);
     else addEnemy(x, z);
-    persist();
   }
 
   function removeLast() {
@@ -115,7 +117,6 @@ export function createEditor(hooks) {
       world.scene.remove(last.item.actor.group);
       enemies = enemies.filter((e) => e !== last.item);
     }
-    persist();
   }
 
   function update(dt, input) {
@@ -149,6 +150,7 @@ export function createEditor(hooks) {
     camTarget.set(pos.x - forward.x * 7, 4.6, pos.z - forward.z * 7);
     camera.position.lerp(camTarget, 1 - Math.exp(-5 * dt));
     camera.lookAt(pos.x, 1, pos.z);
+    if (world.update) world.update(elapsed, dt, pos);
     coins.forEach((coin) => updateCoin(coin.mesh, elapsed));
     enemies.forEach((enemy) => {
       enemy.actor.setMoving(false);
@@ -160,16 +162,17 @@ export function createEditor(hooks) {
     get scene() { return world ? world.scene : null; },
     get camera() { return camera; },
     update,
-    start(floorId, existing) {
-      const id = floorId || existing?.floor || 'park';
-      const keep = existing && existing.floor === id ? existing : null;
-      boot(id, keep);
-      persist();
+    start(floorId) {
+      saveId = null;
+      boot(floorId || 'park', null);
     },
     setFloor(floorId) {
       const keep = snapshot();
       boot(floorId, { coins: keep.coins, enemies: keep.enemies });
-      persist();
+      saveId = keep.id;
+    },
+    noteSaved(id) {
+      saveId = id;
     },
     spawn,
     removeLast,
