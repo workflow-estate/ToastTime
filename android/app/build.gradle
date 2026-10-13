@@ -5,10 +5,10 @@ def keystorePath = env.ANDROID_KEYSTORE_PATH
 def hasReleaseKey = keystorePath != null && !keystorePath.trim().isEmpty()
 
 android {
-    namespace = "com.toasttime.game"
+    namespace = "toasttime.workflow.estate"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.toasttime.game"
+        applicationId "toasttime.workflow.estate"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode env.ANDROID_VERSION_CODE ? env.ANDROID_VERSION_CODE.toInteger() : 1

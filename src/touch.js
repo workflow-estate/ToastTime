@@ -5,7 +5,8 @@ import { getSkin } from './skins.js';
 const ACTIVE = new Set(['play', 'soccer', 'party', 'editor']);
 
 export function wantsTouch() {
-  return Capacitor.isNativePlatform();
+  const macApp = typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent);
+  return Capacitor.isNativePlatform() || macApp;
 }
 
 export function createTouch(input, { onLook, onUnlock }) {
