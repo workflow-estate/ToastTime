@@ -3,7 +3,7 @@ import { dressScene, stdMat, addMesh } from './lights.js';
 import { grassTexture, pathTexture, iceTexture, rockTexture, metalTexture, lavaTexture, labelTexture } from './textures.js';
 import { makeRng } from './util.js';
 import { circleHitsAny, findClearPoint } from './collision.js';
-import { createOpenWorld } from './openworld.js';
+import { createOpenWorld, worldSurface } from './openworld.js';
 
 function boundsOf(half) {
   return { minX: -half, maxX: half, minZ: -half, maxZ: half };
@@ -184,43 +184,43 @@ export const MAP_LIST = [
   {
     id: 'fridge',
     name: 'FROZEN FRIDGE',
-    desc: 'A chilly fridge where the jam gets frostbite.',
+    desc: 'Icebergs, frozen falls, and a long ice bridge.',
     swatch: ['#d7f4ff', '#7ec8ef', '#ffffff'],
   },
   {
     id: 'volcano',
     name: 'VOLCANO TOAST',
-    desc: 'Hot rock, lava glow, and a very toasted attitude.',
+    desc: 'Huge hills, volcanoes, and rivers of lava.',
     swatch: ['#3a241c', '#ff5a1f', '#ffb03a'],
   },
   {
     id: 'space',
     name: 'SPACE KITCHEN',
-    desc: 'A neon kitchen floating past the stars.',
+    desc: 'Giant appliances, neon falls, and a kitchen bridge.',
     swatch: ['#24143f', '#7cf0ff', '#8ea0b5'],
   },
 ];
 
 const LOOKS = {
   park: {
-    background: '#3aa0f0', fog: '#9fd4ff', fogNear: 24, fogFar: 62,
-    sky: '#cfe9ff', ground: '#5aaa45', sun: '#fff6df', sunIntensity: 1.35,
-    skyTop: '#1d78e0', skyBottom: '#7ec8ff', hemi: 0.72, shadowSpan: 34,
+    background: '#2f9fff', fog: '#8ecfff', fogNear: 120, fogFar: 460,
+    sky: '#e7f6ff', ground: '#5ae030', sun: '#fffaf0', sunIntensity: 1.85,
+    skyTop: '#1c8fff', skyBottom: '#b7e7ff', hemi: 0.95, shadowSpan: 42,
   },
   fridge: {
-    background: '#c5e9ff', fog: '#e7f7ff', fogNear: 18, fogFar: 50,
-    sky: '#f4fbff', ground: '#9fd0ea', sun: '#e7f4ff', sunIntensity: 1.25,
-    skyTop: '#b9e4ff', skyBottom: '#f7fdff', hemi: 0.9, fill: '#d7ecff', shadowSpan: 32,
+    background: '#7ecbff', fog: '#d7f4ff', fogNear: 90, fogFar: 420,
+    sky: '#f7fdff', ground: '#dff6ff', sun: '#ffffff', sunIntensity: 1.7,
+    skyTop: '#3aa0ff', skyBottom: '#e7fbff', hemi: 0.95, shadowSpan: 42,
   },
   volcano: {
-    background: '#2a120e', fog: '#4a2418', fogNear: 16, fogFar: 48,
-    sky: '#ffb07a', ground: '#3a241c', sun: '#ffb060', sunIntensity: 1.35,
-    skyTop: '#ff7a3a', skyBottom: '#2a120e', hemi: 0.55, fill: '#ff8a4a', shadowSpan: 32,
+    background: '#ff7a3a', fog: '#ffc48a', fogNear: 80, fogFar: 400,
+    sky: '#ffd7b0', ground: '#4a2018', sun: '#fff1c2', sunIntensity: 1.7,
+    skyTop: '#ff5a1a', skyBottom: '#ffd0a0', hemi: 0.85, shadowSpan: 42,
   },
   space: {
-    background: '#090714', fog: '#1a1030', fogNear: 20, fogFar: 70,
-    sky: '#9ecbff', ground: '#2a2148', sun: '#d7e4ff', sunIntensity: 1.15,
-    skyTop: '#120a24', skyBottom: '#3a2468', hemi: 0.62, fill: '#7aa7ff', shadowSpan: 32,
+    background: '#2a1468', fog: '#6a4ad4', fogNear: 90, fogFar: 420,
+    sky: '#c7b6ff', ground: '#1a1030', sun: '#e7f0ff', sunIntensity: 1.45,
+    skyTop: '#14082e', skyBottom: '#5a3ad4', hemi: 0.75, shadowSpan: 42,
   },
 };
 
@@ -448,7 +448,7 @@ const ENEMY_HINTS = {
 
 export function buildMap(id) {
   const scene = new THREE.Scene();
-  const look = { ...(LOOKS[id] || LOOKS.park), fogNear: 40, fogFar: 150, shadowSpan: 36 };
+  const look = { ...(LOOKS[id] || LOOKS.park), shadowSpan: 42 };
   dressScene(scene, look);
   const colliders = [];
   const open = createOpenWorld(scene, id, colliders);
@@ -465,6 +465,7 @@ export function buildMap(id) {
     spawn,
     coins,
     enemies,
+    heightAt: (x, z) => worldSurface(id, x, z),
     update: (t, dt, pos) => {
       open.update(t, dt, pos || spawn);
       if (scene.userData.tick) scene.userData.tick(t, dt);

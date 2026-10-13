@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { getSkin, ENEMY_SKIN } from './skins.js';
 
 const ICE = new THREE.Color('#8ecfff');
+const LEG_Y = 0.28;
 
 function toastShape(w, h, topR, botR) {
   const s = new THREE.Shape();
@@ -19,15 +20,6 @@ function toastShape(w, h, topR, botR) {
   return s;
 }
 
-function mat(color, extras = {}) {
-  return new THREE.MeshStandardMaterial({
-    color,
-    roughness: 0.52,
-    metalness: 0.02,
-    ...extras,
-  });
-}
-
 function extrude(shape, depth, bevel) {
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth,
@@ -40,6 +32,15 @@ function extrude(shape, depth, bevel) {
   geo.translate(0, 0, -depth / 2);
   geo.computeVertexNormals();
   return geo;
+}
+
+function mat(color, extras = {}) {
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.52,
+    metalness: 0.02,
+    ...extras,
+  });
 }
 
 function enableShadows(root) {
@@ -204,7 +205,7 @@ export function createToastActor(skinId, options = {}) {
       legs.forEach((leg, i) => {
         const stride = Math.sin(phase + i * Math.PI);
         leg.rotation.x = stride * 0.42 * w;
-        leg.position.y = 0.28 + Math.max(0, -stride) * 0.05 * w;
+        leg.position.y = LEG_Y + Math.max(0, -stride) * 0.05 * w;
       });
       arms.forEach((arm, i) => {
         const stride = Math.sin(phase + i * Math.PI);
@@ -308,7 +309,7 @@ export function attachHealthBar(actor) {
     transparent: true,
     depthWrite: false,
   }));
-  sprite.position.y = 1.9;
+  sprite.position.y = 1.7;
   sprite.scale.set(1.25, 0.2, 1);
   sprite.renderOrder = 4;
   actor.group.add(sprite);
@@ -452,7 +453,7 @@ export function createOrbitRig() {
     },
     update(dt, origin) {
       this.angle += dt * 3.4;
-      group.position.set(origin.x, 0.9, origin.z);
+      group.position.set(origin.x, (origin.y || 0) + 0.95, origin.z);
       for (let i = 0; i < balls.length; i += 1) {
         if (!balls[i].visible) continue;
         const a = this.angle + (i / Math.max(1, this.count)) * Math.PI * 2;

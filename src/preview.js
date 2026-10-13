@@ -5,26 +5,25 @@ import { createCoinMesh, updateCoin } from './pickups.js';
 import { lerpAngle, yawFromDir } from './util.js';
 
 const LOOP = [
-  { x: 0, z: 12 },
-  { x: 7, z: 6 },
-  { x: 8, z: -2 },
-  { x: 2, z: -8 },
-  { x: -7, z: -6 },
-  { x: -6, z: 6 },
+  { x: 4, z: 8 },
+  { x: 8, z: 5 },
+  { x: 5, z: 2 },
+  { x: 1, z: 6 },
 ];
 
 export function createPreview() {
   const world = buildMap('park');
   const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 1500);
-  const hero = createToastActor('butter');
-  hero.group.position.set(LOOP[0].x, 0, LOOP[0].z);
+  const feet = (x, z) => (world.heightAt ? world.heightAt(x, z) : 0);
+  const hero = createToastActor('classic');
+  hero.group.position.set(LOOP[0].x, feet(LOOP[0].x, LOOP[0].z), LOOP[0].z);
   world.scene.add(hero.group);
   const chaser = createToastActor('classic', { angry: true });
-  chaser.group.position.set(-8, 0, -2);
+  chaser.group.position.set(-8, feet(-8, -2), -2);
   world.scene.add(chaser.group);
   const coins = world.coins.slice(0, 6).map((spot) => {
     const mesh = createCoinMesh();
-    mesh.position.set(spot.x, mesh.userData.baseY, spot.z);
+    mesh.position.set(spot.x, feet(spot.x, spot.z) + mesh.userData.baseY, spot.z);
     world.scene.add(mesh);
     return mesh;
   });
@@ -45,6 +44,7 @@ export function createPreview() {
     const step = Math.min(dist, dt * 4.2);
     pos.x += (dx / dist) * step;
     pos.z += (dz / dist) * step;
+    pos.y = feet(pos.x, pos.z);
     hero.group.rotation.y = lerpAngle(hero.group.rotation.y, yawFromDir(dx, dz), 1 - Math.exp(-6 * dt));
     hero.setMoving(true);
     hero.update(dt);
@@ -58,6 +58,7 @@ export function createPreview() {
       cpos.x += (hx / hd) * dt * 2.4;
       cpos.z += (hz / hd) * dt * 2.4;
     }
+    cpos.y = feet(cpos.x, cpos.z);
     chaser.group.rotation.y = lerpAngle(chaser.group.rotation.y, yawFromDir(hx, hz), 1 - Math.exp(-6 * dt));
     chaser.setMoving(true);
     chaser.update(dt);
@@ -70,11 +71,11 @@ export function createPreview() {
     const sideZ = -faceX;
     camTarget.set(
       pos.x + faceX * 6.2 + sideX * 2.4,
-      split ? 3.15 : 4.6,
+      pos.y + (split ? 2.35 : 3.8),
       pos.z + faceZ * 6.2 + sideZ * 2.4,
     );
     camera.position.lerp(camTarget, 1 - Math.exp(-3.2 * dt));
-    camera.lookAt(pos.x - (split ? 1.8 : 0), 1.05, pos.z);
+    camera.lookAt(pos.x - (split ? 1.8 : 0), pos.y + 1.05, pos.z);
     if (split && window.innerWidth > 860) {
       const shift = Math.min(460, window.innerWidth * 0.32);
       camera.setViewOffset(window.innerWidth, window.innerHeight, -shift, 0, window.innerWidth, window.innerHeight);

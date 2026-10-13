@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, nativeImage, shell } = require('electron');
+const fs = require('fs');
 const path = require('path');
 
 app.setName('Toast Time');
@@ -67,6 +68,8 @@ function installMenu() {
 }
 
 app.whenReady().then(() => {
+  const iconPath = path.join(process.resourcesPath, 'icon.icns');
+  if (app.dock && fs.existsSync(iconPath)) app.dock.setIcon(nativeImage.createFromPath(iconPath));
   installMenu();
   createWindow();
   app.on('activate', () => {

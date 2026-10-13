@@ -265,15 +265,18 @@ export function updateBoss(boss, dt, ctx) {
     return;
   }
 
+  const floorAt = (x, z) => (ctx.heightAt ? ctx.heightAt(x, z) : 0);
+
   if (boss.mode === 'enter') {
     boss.enter -= dt;
     const t = 1 - Math.max(0, boss.enter) / 0.9;
-    boss.y = (1 - t) * 6;
+    const floor = floorAt(boss.x, boss.z);
+    boss.y = floor + (1 - t) * 6;
     boss.group.position.set(boss.x, boss.y, boss.z);
     boss.group.scale.setScalar(0.4 + 0.6 * t);
     if (boss.enter <= 0) {
       boss.mode = 'chase';
-      boss.y = 0;
+      boss.y = floor;
       boss.group.scale.setScalar(1);
     }
     return;
@@ -328,14 +331,14 @@ export function updateBoss(boss, dt, ctx) {
     }
   } else if (boss.mode === 'slam') {
     const hop = boss.modeT > 0 ? (0.42 - boss.modeT) * 2.2 : 0;
-    boss.y = Math.max(0, hop);
+    boss.y = floorAt(boss.x, boss.z) + Math.max(0, hop);
     if (boss.modeT <= 0 && boss.modeT > -0.05) {
       ctx.onSlam(boss);
     }
     if (boss.modeT <= -0.35) {
       boss.mode = 'chase';
       boss.attackCd = 1.8;
-      boss.y = 0;
+      boss.y = floorAt(boss.x, boss.z);
     }
   } else if (boss.mode === 'meteor') {
     if (!boss.meteorSpawned) spawnMeteorWave(boss, ctx);
@@ -350,7 +353,7 @@ export function updateBoss(boss, dt, ctx) {
       meteor.mesh.rotation.y += dt * 3;
       const pulse = 0.9 + Math.sin(ctx.time * 14) * 0.15;
       meteor.mark.scale.setScalar(pulse);
-      if (meteor.y <= 0.45) {
+      if (meteor.y <= floorAt(meteor.x, meteor.z) + 0.45) {
         meteor.hit = true;
         meteor.mesh.visible = false;
         meteor.mark.visible = false;
@@ -361,7 +364,7 @@ export function updateBoss(boss, dt, ctx) {
       clearMeteors(boss);
       boss.mode = 'chase';
       boss.attackCd = 2.05;
-      boss.y = 0;
+      boss.y = floorAt(boss.x, boss.z);
     }
   }
 
@@ -369,6 +372,7 @@ export function updateBoss(boss, dt, ctx) {
   resolveCircle(pos, boss.radius, ctx.colliders);
   boss.x = pos.x;
   boss.z = pos.z;
+  if (boss.mode !== 'slam') boss.y = floorAt(boss.x, boss.z);
   boss.group.position.set(boss.x, boss.y, boss.z);
   boss.group.rotation.y = boss.yaw;
   boss.freezeOn = Boolean(ctx.frozen);

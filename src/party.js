@@ -427,12 +427,9 @@ export function createParty(hooks) {
     sfx.kick();
     const px = player.group.position.x;
     const pz = player.group.position.z;
-    forwardFromYaw(player.group.rotation.y, forward);
-    const hx = px + forward.x * 0.95;
-    const hz = pz + forward.z * 0.95;
     ais.forEach((ai) => {
       if (ai.dead || ai.dying > 0) return;
-      if (Math.hypot(ai.x - hx, ai.z - hz) < 1.15) hurtAi(ai, px, pz);
+      if (Math.hypot(ai.x - px, ai.z - pz) < 2.5) hurtAi(ai, px, pz);
     });
   }
 
@@ -443,8 +440,9 @@ export function createParty(hooks) {
     const dx = x - px;
     const dz = z - pz;
     const dist = Math.hypot(dx, dz);
-    if (dist < 0.2 || dist > 3.4) return false;
-    return (dx / dist) * forward.x + (dz / dist) * forward.z > 0.4;
+    if (dist < 0.2 || dist > 5.2) return false;
+    if (dist < 2.4) return true;
+    return (dx / dist) * forward.x + (dz / dist) * forward.z > 0.05;
   }
 
   function usePartyPower(dt, input) {

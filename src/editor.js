@@ -3,7 +3,8 @@ import { buildMap } from './maps.js';
 import { createToastActor } from './toast.js';
 import { createCoinMesh, updateCoin } from './pickups.js';
 import { createEnemy } from './enemies.js';
-import { resolveCircle, findClearPoint } from './collision.js';
+import { climbStep, findClearPoint } from './collision.js';
+import { PARK_STEP } from './openworld.js';
 import { readMove } from './input.js';
 import { lerpAngle, yawFromDir, forwardFromYaw } from './util.js';
 
@@ -55,7 +56,8 @@ export function createEditor(hooks) {
   function addCoin(x, z, record = true) {
     const spot = findClearPoint(x, z, 0.5, world.colliders, world.bounds) || { x, z };
     const mesh = createCoinMesh();
-    mesh.position.set(spot.x, mesh.userData.baseY, spot.z);
+    const gy = world.heightAt ? world.heightAt(spot.x, spot.z) : 0;
+    mesh.position.set(spot.x, gy + mesh.userData.baseY, spot.z);
     world.scene.add(mesh);
     const item = { mesh, x: spot.x, z: spot.z };
     coins.push(item);
@@ -66,6 +68,7 @@ export function createEditor(hooks) {
   function addEnemy(x, z, record = true) {
     const spot = findClearPoint(x, z, 0.6, world.colliders, world.bounds) || { x, z };
     const enemy = createEnemy(world.scene, spot.x, spot.z);
+    if (world.heightAt) enemy.actor.group.position.y = world.heightAt(spot.x, spot.z);
     if (record) placed.push({ kind: 'enemy', item: enemy });
     enemies.push(enemy);
     return enemy;
@@ -78,7 +81,7 @@ export function createEditor(hooks) {
     camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.12, 1200);
     const save = hooks.getSave();
     player = createToastActor(save.selectedSkin);
-    player.group.position.set(world.spawn.x, 0, world.spawn.z);
+    player.group.position.set(world.spawn.x, world.heightAt ? world.heightAt(world.spawn.x, world.spawn.z) : 0, world.spawn.z);
     player.group.rotation.y = world.spawn.yaw || 0;
     world.scene.add(player.group);
     camYaw = world.spawn.yaw || 0;
@@ -134,12 +137,7 @@ export function createEditor(hooks) {
     if (len > 1) { mx /= len; mz /= len; }
     const pos = player.group.position;
     const speed = 7;
-    pos.x += mx * speed * dt;
-    pos.z += mz * speed * dt;
-    const body = { x: pos.x, z: pos.z };
-    resolveCircle(body, 0.46, world.colliders);
-    pos.x = body.x;
-    pos.z = body.z;
+    climbStep(pos, pos.x + mx * speed * dt, pos.z + mz * speed * dt, 0.46, world.colliders, world.heightAt, PARK_STEP, dt);
     if (len > 0.1) {
       player.group.rotation.y = lerpAngle(player.group.rotation.y, yawFromDir(mx, mz), 1 - Math.exp(-12 * dt));
     }
@@ -147,11 +145,15 @@ export function createEditor(hooks) {
     player.update(dt);
     camYaw = lerpAngle(camYaw, player.group.rotation.y, 1 - Math.exp(-3 * dt));
     forwardFromYaw(camYaw, forward);
-    camTarget.set(pos.x - forward.x * 7, 4.6, pos.z - forward.z * 7);
+    camTarget.set(pos.x - forward.x * 7, pos.y + 4.6, pos.z - forward.z * 7);
     camera.position.lerp(camTarget, 1 - Math.exp(-5 * dt));
-    camera.lookAt(pos.x, 1, pos.z);
+    camera.lookAt(pos.x, pos.y + 1.1, pos.z);
     if (world.update) world.update(elapsed, dt, pos);
-    coins.forEach((coin) => updateCoin(coin.mesh, elapsed));
+    coins.forEach((coin) => {
+      updateCoin(coin.mesh, elapsed);
+      const gy = world.heightAt ? world.heightAt(coin.x, coin.z) : 0;
+      coin.mesh.position.y += gy;
+    });
     enemies.forEach((enemy) => {
       enemy.actor.setMoving(false);
       enemy.actor.update(dt);

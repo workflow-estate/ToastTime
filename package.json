@@ -25,6 +25,7 @@
       "dist/**/*",
       "package.json"
     ],
+    "afterPack": "./scripts/mac-helper-icon.cjs",
     "mac": {
       "category": "public.app-category.games",
       "icon": "build/icon.png",

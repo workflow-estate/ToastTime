@@ -15,6 +15,40 @@ export function circleHitsAny(x, z, radius, rects) {
   return false;
 }
 
+function easeFeet(pos, target, dt) {
+  if (target == null) return;
+  if (!Number.isFinite(pos.y)) {
+    pos.y = target;
+    return;
+  }
+  const k = 1 - Math.exp(-14 * dt);
+  pos.y += (target - pos.y) * k;
+  if (Math.abs(target - pos.y) < 0.02) pos.y = target;
+}
+
+export function climbStep(pos, nextX, nextZ, radius, rects, heightAt, maxStep = 1.15, dt = 0.016) {
+  const attempt = (x, z) => {
+    const body = { x, z };
+    resolveCircle(body, radius, rects);
+    if (!heightAt) return body;
+    const h0 = heightAt(pos.x, pos.z);
+    const h1 = heightAt(body.x, body.z);
+    if (h1 - h0 > maxStep + 0.02) return null;
+    body.y = h1;
+    return body;
+  };
+  const full = attempt(nextX, nextZ);
+  const picked = full || attempt(nextX, pos.z) || attempt(pos.x, nextZ);
+  if (!picked) {
+    if (heightAt) easeFeet(pos, heightAt(pos.x, pos.z), dt);
+    return pos;
+  }
+  pos.x = picked.x;
+  pos.z = picked.z;
+  if (picked.y != null) easeFeet(pos, picked.y, dt);
+  return pos;
+}
+
 export function resolveCircle(pos, radius, rects) {
   for (let iter = 0; iter < 3; iter += 1) {
     for (let i = 0; i < rects.length; i += 1) {

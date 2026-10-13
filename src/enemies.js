@@ -1,5 +1,6 @@
 import { attachHealthBar, createToastActor } from './toast.js';
-import { resolveCircle } from './collision.js';
+import { climbStep } from './collision.js';
+import { PARK_STEP } from './openworld.js';
 import { yawFromDir } from './util.js';
 
 export function createEnemy(scene, x, z) {
@@ -53,15 +54,23 @@ export function updateEnemy(enemy, dt, ctx) {
   enemy.knockX *= Math.max(0, 1 - dt * 6);
   enemy.knockZ *= Math.max(0, 1 - dt * 6);
   const speed = ctx.frozen ? enemy.speed * 0.08 : enemy.speed;
-  enemy.x += mx * speed * dt + enemy.knockX * dt;
-  enemy.z += mz * speed * dt + enemy.knockZ * dt;
-  const pos = { x: enemy.x, z: enemy.z };
-  resolveCircle(pos, enemy.radius, ctx.colliders);
+  const pos = { x: enemy.x, z: enemy.z, y: enemy.actor.group.position.y };
+  climbStep(
+    pos,
+    enemy.x + mx * speed * dt + enemy.knockX * dt,
+    enemy.z + mz * speed * dt + enemy.knockZ * dt,
+    enemy.radius,
+    ctx.colliders,
+    ctx.heightAt,
+    PARK_STEP,
+    dt,
+  );
   enemy.x = pos.x;
   enemy.z = pos.z;
   enemy.yaw = yawFromDir(mx, mz);
   enemy.actor.group.position.x = enemy.x;
   enemy.actor.group.position.z = enemy.z;
+  if (ctx.heightAt) enemy.actor.group.position.y = pos.y;
   enemy.actor.group.rotation.y = enemy.yaw;
   enemy.actor.setMoving(speed > 0.4 && !ctx.frozen);
   enemy.actor.setChill(Boolean(ctx.frozen), dt);

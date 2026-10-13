@@ -7,30 +7,65 @@ const FAR = 3;
 
 const THEMES = {
   park: {
-    kind: 'town',
+    kind: 'voxel',
+    biome: 'park',
     ground: '#d7f5c4', soil: '#1d4a28', road: '#101218', line: '#f2d15a', walk: '#b7ab9c',
     trunk: '#8a5a32', leaf: '#3aaa4a', house: '#f4e2c4', roof: '#d4533a',
     lamp: '#fff1c2', bush: '#2f8f45', car: ['#e24b4b', '#3d7edb', '#f0c14a', '#f7f7f7', '#59b36a'],
   },
   fridge: {
-    kind: 'fridge',
+    kind: 'voxel',
+    biome: 'fridge',
     ground: '#e7fbff', soil: '#e7f6ff', road: '#d4eef8', line: '#ffffff', walk: '#f7fdff',
     trunk: '#d5e7ee', leaf: '#b7eadc', house: '#f7fbff', roof: '#9fd0ea',
     lamp: '#e7f7ff', bush: '#d5fff2', car: ['#f4fbff', '#d7ecff', '#ffffff', '#c9e7ff'],
     food: ['#ff7aa2', '#ffe27a', '#7CFFB2', '#8ecbff'],
   },
   volcano: {
-    kind: 'volcano',
+    kind: 'voxel',
+    biome: 'volcano',
     ground: '#6a4030', soil: '#241410', road: '#1a100e', line: '#ffb03a', walk: '#4a2c24',
     trunk: '#4a2a22', leaf: '#c45a28', house: '#5a382e', roof: '#2a1612',
     lamp: '#ffb060', bush: '#8a4028', car: ['#5a3028', '#2a2a2a', '#8a4030', '#c46a32'],
   },
   space: {
-    kind: 'kitchen',
+    kind: 'voxel',
+    biome: 'space',
     ground: '#e6d4b8', soil: '#e4d2b4', road: '#f3e6d0', line: '#fff6e8', walk: '#cbb892',
     trunk: '#8a96b0', leaf: '#3a8cff', house: '#f4efe6', roof: '#8a9098',
     lamp: '#b8ffe8', bush: '#3a6a9a', car: ['#f7f7f5', '#c8ccd2', '#5a616b'],
     food: ['#ff7aa2', '#ffe27a', '#7CFFB2', '#ffb089'],
+  },
+};
+
+const PALETTE = {
+  park: {
+    grass: '#5aee32', stone: '#8b9cb3', stone2: '#62748c',
+    trunk: '#c47a32', leaf: '#3ecf48', leaf2: '#8af25a',
+    liquid: '#3ad4ff', liquidGlow: '#14c4ff', liquidIntensity: 0.7,
+    wood: '#c17a38', cloud: '#ffffff', tuft: '#b6ff6a',
+    flower: '#ff5d7a', flower2: '#ffe14a', ground: '#3ec6f4',
+  },
+  fridge: {
+    grass: '#f7fdff', stone: '#b7e4f8', stone2: '#7ec8ef',
+    trunk: '#e7f7ff', leaf: '#8ad4ff', leaf2: '#ffffff',
+    liquid: '#6ec4ff', liquidGlow: '#2a9cff', liquidIntensity: 0.85,
+    wood: '#d5eef8', cloud: '#ffffff', tuft: '#e7fbff',
+    flower: '#d7f4ff', flower2: '#ffffff', ground: '#4eb6f0', groundGlow: '#1a8fd4',
+  },
+  volcano: {
+    grass: '#6a4030', stone: '#3a221c', stone2: '#241410',
+    trunk: '#2a140e', leaf: '#ff6a1a', leaf2: '#ffb03a',
+    liquid: '#ff4a12', liquidGlow: '#ff8a1a', liquidIntensity: 1.35,
+    wood: '#8a5a32', cloud: '#ffd0a8', tuft: '#c45a28',
+    flower: '#ff5a1f', flower2: '#ffe14a', ground: '#ff5a1a', groundGlow: '#ff3a00',
+  },
+  space: {
+    grass: '#d5deee', stone: '#5a687c', stone2: '#3a4458',
+    trunk: '#9aa6be', leaf: '#3dffe8', leaf2: '#ff7ad9',
+    liquid: '#3dffe8', liquidGlow: '#14ffd0', liquidIntensity: 1.1,
+    wood: '#e6d4b8', cloud: '#efe6ff', tuft: '#9ecbff',
+    flower: '#ff7ad9', flower2: '#ffe27a', ground: '#140a28', groundGlow: '#3a2468',
   },
 };
 
@@ -43,6 +78,275 @@ leafGeo.userData.shared = true;
 trunkGeo.userData.shared = true;
 wheelGeo.userData.shared = true;
 const dummy = new THREE.Object3D();
+
+export const PARK_STEP = 1.15;
+const FILL = PARK_STEP * 1.02;
+const voxelGeo = new THREE.BoxGeometry(FILL, FILL, FILL);
+voxelGeo.userData.shared = true;
+
+function sharedGeo(geo) {
+  geo.userData.shared = true;
+  return geo;
+}
+
+function makeWedge() {
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.5, 0);
+  shape.lineTo(0.5, 0);
+  shape.lineTo(0.5, 1);
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 1 });
+  geo.translate(0, -0.5, -0.5);
+  geo.scale(FILL, FILL, FILL);
+  geo.computeVertexNormals();
+  return sharedGeo(geo);
+}
+
+function makeRidge() {
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.5, 0);
+  shape.lineTo(0.5, 0);
+  shape.lineTo(0, 1);
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false, curveSegments: 1 });
+  geo.translate(0, -0.5, -0.5);
+  geo.scale(FILL, FILL, FILL);
+  geo.computeVertexNormals();
+  return sharedGeo(geo);
+}
+
+function makePyramid() {
+  const s = FILL / 2;
+  const h = FILL / 2;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([
+    -s, -h, -s, s, -h, -s, s, -h, s, -s, -h, s, 0, h, 0,
+  ], 3));
+  geo.setIndex([0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4, 0, 3, 2, 0, 2, 1]);
+  geo.computeVertexNormals();
+  return sharedGeo(geo);
+}
+
+const wedgeGeo = makeWedge();
+const ridgeGeo = makeRidge();
+const pyramidGeo = makePyramid();
+const moundGeo = sharedGeo(new THREE.SphereGeometry(FILL * 0.5, 12, 8));
+const coneGeo = sharedGeo(new THREE.ConeGeometry(FILL * 0.58, FILL, 12));
+const cylinderGeo = sharedGeo(new THREE.CylinderGeometry(FILL * 0.58, FILL * 0.62, FILL, 12));
+const HILL_GEOS = {
+  wedge: wedgeGeo,
+  ridge: ridgeGeo,
+  pyramid: pyramidGeo,
+  mound: moundGeo,
+  cone: coneGeo,
+  cylinder: cylinderGeo,
+};
+const HILL_KINDS = Object.keys(HILL_GEOS);
+
+function hillKind(ix, iz) {
+  const gx = Math.floor(ix / 3);
+  const gz = Math.floor(iz / 3);
+  return HILL_KINDS[Math.floor(cellHash(gx, gz) * HILL_KINDS.length)];
+}
+
+function hillYaw(ix, iz) {
+  const gx = Math.floor(ix / 3);
+  const gz = Math.floor(iz / 3);
+  return Math.floor(cellHash(gx + 2, gz + 5) * 4) * (Math.PI / 2);
+}
+
+function cellHash(ix, iz) {
+  let n = Math.imul(ix | 0, 374761393) ^ Math.imul(iz | 0, 668265263);
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+}
+
+function baseSteps(ix, iz) {
+  const n = Math.sin(ix * 0.05) * 5.2 + Math.cos(iz * 0.046) * 4.6 + Math.sin(ix * 0.02 + iz * 0.018) * 1.8;
+  return Math.max(2, Math.min(16, Math.round(n + 8)));
+}
+
+function showcaseCell(ix, iz) {
+  if (ix < -18 || ix > 36 || iz < -52 || iz > 16) return null;
+
+  const deckZ = iz <= -18 && iz >= -25;
+  if (deckZ && ix >= 5 && ix <= 7) return { steps: 18, kind: 'grass' };
+  if (deckZ && ix >= 8 && ix <= 28) return { steps: 18, kind: 'wood' };
+  if (deckZ && ix === 29) return { steps: 19, kind: 'grass' };
+  if (deckZ && ix === 30) return { steps: 20, kind: 'grass' };
+  if (deckZ && ix === 31) return { steps: 21, kind: 'grass' };
+  if (deckZ && ix === 32) return { steps: 22, kind: 'grass' };
+  if (deckZ && ix === 33) return { steps: 23, kind: 'grass' };
+  if (deckZ && ix === 34) return { steps: 24, kind: 'grass' };
+
+  if (ix >= 5 && ix <= 7 && iz <= -2 && iz >= -17) return { steps: 3 + (-2 - iz), kind: 'grass' };
+
+  if (iz >= -12) return { steps: 3, kind: 'grass' };
+  if (iz <= -14) {
+    const gorge = ix >= 14 && ix <= 28;
+    if (!gorge && (ix <= -4 || ix >= 5)) return { steps: 24, kind: 'grass' };
+    return { steps: 2, kind: 'grass' };
+  }
+  return { steps: 3, kind: 'grass' };
+}
+
+function longBridge(ix, iz) {
+  const periodZ = 64;
+  const originZ = 80;
+  const centerZ = originZ + Math.round((iz - originZ) / periodZ) * periodZ;
+  const dz = iz - centerZ;
+  const periodX = 48;
+  const originX = 8;
+  const centerX = originX + Math.round((ix - originX) / periodX) * periodX;
+  const dx = ix - centerX;
+  const span = 20;
+  const width = 5;
+  if (Math.abs(dx) > width) return null;
+  if (Math.abs(dz) > span + 18) return null;
+  const north = baseSteps(centerX, centerZ - span - 1);
+  const south = baseSteps(centerX, centerZ + span + 1);
+  const deck = Math.max(north, south, 4);
+  if (Math.abs(dz) <= span) return { steps: deck, kind: 'wood' };
+  const dist = Math.abs(dz) - span;
+  const target = baseSteps(ix, iz);
+  const steps = target > deck ? Math.min(target, deck + dist) : Math.max(target, deck - dist);
+  if (steps === target) return null;
+  return { steps, kind: 'grass' };
+}
+
+function parkFalls(ix, iz, dx, dz) {
+  if (dx === 0 && dz === 1 && iz === -14 && ix >= 10 && ix <= 13) return true;
+  return dx === 0 && dz === 1 && cellHash(ix * 3 + 1, iz) < 0.08;
+}
+
+export function parkCell(ix, iz) {
+  const shown = showcaseCell(ix, iz);
+  if (shown) return shown;
+  const bridge = longBridge(ix, iz);
+  if (bridge) return bridge;
+  return { steps: baseSteps(ix, iz), kind: 'grass' };
+}
+
+export function parkStepsAt(ix, iz) {
+  return parkCell(ix, iz).steps;
+}
+
+export function parkSurface(x, z) {
+  return worldSurface('park', x, z);
+}
+
+function volcanoCell(ix, iz) {
+  if (ix < -28 || ix > 42 || iz < -68 || iz > 16) return volcanoWild(ix, iz);
+  if (iz >= -16 && iz <= -12 && ix >= 1 && ix <= 16) return { steps: 5, kind: 'wood' };
+  if (iz === -19 && ix >= 7 && ix <= 14) return { steps: 4, kind: 'rock', shaped: false };
+  if (iz === -20 && ix >= 7 && ix <= 14) return { steps: 16, kind: 'rock', shaped: false };
+  const dist = Math.hypot(ix - 10, iz + 30);
+  if (dist < 14) {
+    const rise = Math.round(14 - dist);
+    if (dist < 3) return { steps: 10, kind: 'liquid', shaped: false };
+    return { steps: 5 + rise, kind: 'rock', shaped: false };
+  }
+  if (ix >= 5 && ix <= 8 && iz <= -8 && iz >= -22) return { steps: 2, kind: 'liquid' };
+  return { steps: 5, kind: 'rock', shaped: false };
+}
+
+function volcanoWild(ix, iz) {
+  const steps = baseSteps(ix, iz);
+  const gx = Math.floor(ix / 30);
+  const gz = Math.floor(iz / 30);
+  if (cellHash(gx + 1, gz + 4) < 0.4) {
+    const cx = gx * 30 + 15;
+    const cz = gz * 30 + 15;
+    const dist = Math.hypot(ix - cx, iz - cz);
+    if (dist < 11) {
+      if (dist < 2.4) return { steps: 9, kind: 'liquid', shaped: false };
+      return { steps: Math.max(steps, 4 + Math.round(11 - dist)), kind: 'rock', shaped: false };
+    }
+  }
+  if (steps <= 4 && cellHash(ix, iz) < 0.5) return { steps: 2, kind: 'liquid' };
+  return { steps, kind: 'rock' };
+}
+
+function fridgeCell(ix, iz) {
+  if (ix < -36 || ix > 42 || iz < -66 || iz > 16) return fridgeWild(ix, iz);
+  if (iz >= -36 && iz <= -14 && ix >= -10 && ix <= 20) return { steps: 12, kind: 'wood' };
+  if (ix >= -5 && ix <= 6 && iz <= -6 && iz >= -13) return { steps: 4 + (-6 - iz), kind: 'snow', shaped: false };
+  if (ix >= -10 && ix <= 20 && iz <= -37 && iz >= -47) return { steps: Math.max(2, 12 - (-36 - iz)), kind: 'snow', shaped: false };
+  if (iz === -25 && ix >= -20 && ix <= -10) return { steps: 3, kind: 'snow', shaped: false };
+  if (iz === -26 && ix >= -20 && ix <= -10) return { steps: 18, kind: 'snow', shaped: false };
+  const bergs = [
+    { x: -16, z: -32, r: 12 },
+    { x: 22, z: -34, r: 10 },
+    { x: -30, z: -52, r: 9 },
+  ];
+  let peak = 0;
+  bergs.forEach((berg) => {
+    const dist = Math.hypot(ix - berg.x, iz - berg.z);
+    if (dist < berg.r) peak = Math.max(peak, 2 + Math.round(berg.r - dist));
+  });
+  if (peak) return { steps: peak, kind: 'snow', shaped: false };
+  if (iz < -8) return { steps: 1, kind: 'liquid' };
+  return { steps: 4, kind: 'snow', shaped: false };
+}
+
+function fridgeWild(ix, iz) {
+  const gx = Math.floor((ix + 8) / 24);
+  const gz = Math.floor((iz + 4) / 24);
+  if (cellHash(gx + 2, gz + 7) < 0.72) {
+    const cx = gx * 24 + 6;
+    const cz = gz * 24 + 4;
+    const radius = 6 + Math.floor(cellHash(gx, gz + 1) * 7);
+    const dist = Math.hypot(ix - cx, iz - cz);
+    if (dist < radius) return { steps: 2 + Math.round(radius - dist), kind: 'snow', shaped: false };
+  }
+  const steps = Math.max(2, baseSteps(ix, iz) - 1);
+  if (steps <= 5) return { steps: 1, kind: 'liquid' };
+  return { steps, kind: 'snow' };
+}
+
+function spaceCell(ix, iz) {
+  if (ix < -40 || ix > 44 || iz < -68 || iz > 16) return spaceWild(ix, iz);
+  if (ix >= -6 && ix <= 10 && iz <= -8 && iz >= -11) return { steps: 4 + (-8 - iz), kind: 'metal', shaped: false };
+  if (ix >= 18 && ix <= 23 && iz >= -20 && iz <= -15) return { steps: 6, kind: 'liquid' };
+  if (ix >= 14 && ix <= 30 && iz <= -14 && iz >= -42) return { steps: 14, kind: 'metal', shaped: false };
+  if (ix <= -16 && ix >= -32 && iz <= -14 && iz >= -42) return { steps: 18, kind: 'metal', shaped: false };
+  if (iz >= -36 && iz <= -12 && ix >= -15 && ix <= 13) return { steps: 8, kind: 'wood' };
+  if (ix >= -15 && ix <= 13 && iz <= -37 && iz >= -40) return { steps: 8 - (-36 - iz), kind: 'metal', shaped: false };
+  if (iz < -10 && ix >= -1 && ix <= 1) return { steps: 2, kind: 'liquid' };
+  if (iz >= -8) return { steps: 4, kind: 'metal', shaped: false };
+  return { steps: 4, kind: 'metal' };
+}
+
+function spaceWild(ix, iz) {
+  const steps = baseSteps(ix, iz);
+  if (steps <= 4 && cellHash(ix + 3, iz) < 0.45) return { steps: 2, kind: 'liquid' };
+  return { steps, kind: 'metal' };
+}
+
+function biomeCell(biome, ix, iz) {
+  if (biome === 'volcano') return volcanoCell(ix, iz);
+  if (biome === 'fridge') return fridgeCell(ix, iz);
+  if (biome === 'space') return spaceCell(ix, iz);
+  return parkCell(ix, iz);
+}
+
+function biomeSteps(biome, ix, iz) {
+  return biomeCell(biome, ix, iz).steps;
+}
+
+function biomeFalls(biome, ix, iz, dx, dz) {
+  if (dx !== 0 || dz !== 1) return false;
+  if (biome === 'park') return parkFalls(ix, iz, dx, dz);
+  if (biome === 'volcano' && iz >= -20 && iz <= -16 && ix >= 8 && ix <= 13) return true;
+  if (biome === 'fridge' && iz === -26 && ix >= -18 && ix <= -12) return true;
+  if (biome === 'space' && iz === -14 && ((ix >= 16 && ix <= 22) || (ix >= -26 && ix <= -18))) return true;
+  return cellHash(ix * 5 + 2, iz) < 0.04;
+}
+
+export function worldSurface(mapId, x, z) {
+  const biome = mapId === 'fridge' || mapId === 'volcano' || mapId === 'space' ? mapId : 'park';
+  const ix = Math.round(x / PARK_STEP);
+  const iz = Math.round(z / PARK_STEP);
+  return biomeSteps(biome, ix, iz) * PARK_STEP;
+}
 
 function pushBlade(positions, uvs, colors, yaw, w, h, lift) {
   const c = Math.cos(yaw);
@@ -197,7 +501,17 @@ export function createOpenWorld(scene, themeId, colliders) {
     new THREE.MeshStandardMaterial({ color: theme.soil, roughness: 1 }),
   );
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.04;
+  const voxel = theme.kind === 'voxel';
+  const biome = theme.biome || 'park';
+  const pal = PALETTE[biome] || PALETTE.park;
+  ground.position.y = voxel ? -3.55 : -0.04;
+  if (voxel) {
+    ground.material.color.set(pal.ground);
+    ground.material.emissive.set(pal.groundGlow || '#000000');
+    ground.material.emissiveIntensity = pal.groundGlow ? 0.55 : 0;
+    ground.material.roughness = biome === 'volcano' ? 0.35 : 0.22;
+    ground.material.metalness = 0.06;
+  }
   ground.receiveShadow = true;
   scene.add(ground);
   const tileSize = 1;
@@ -605,7 +919,191 @@ export function createOpenWorld(scene, themeId, colliders) {
     });
   }
 
+  const voxelMats = voxel ? {
+    grass: stdMat(pal.grass, { roughness: 0.78 }),
+    grass2: stdMat(pal.grass, { roughness: 0.78 }),
+    stone: stdMat(pal.stone, { roughness: 0.9 }),
+    stone2: stdMat(pal.stone2, { roughness: 0.9 }),
+    trunk: stdMat(pal.trunk, { roughness: 0.84 }),
+    leaf: stdMat(pal.leaf, { roughness: 0.82, emissive: biome === 'volcano' || biome === 'space' ? pal.leaf : '#000000', emissiveIntensity: biome === 'volcano' || biome === 'space' ? 0.35 : 0 }),
+    leaf2: stdMat(pal.leaf2, { roughness: 0.82, emissive: biome === 'volcano' || biome === 'space' ? pal.leaf2 : '#000000', emissiveIntensity: biome === 'volcano' || biome === 'space' ? 0.28 : 0 }),
+    water: new THREE.MeshStandardMaterial({
+      color: pal.liquid, emissive: pal.liquidGlow, emissiveIntensity: pal.liquidIntensity,
+      roughness: 0.16, metalness: 0.04,
+    }),
+    wood: stdMat(pal.wood, { roughness: 0.72 }),
+    cloud: new THREE.MeshStandardMaterial({ color: pal.cloud, roughness: 1 }),
+    tuft: stdMat(pal.tuft, { roughness: 0.9 }),
+    flower: stdMat(pal.flower, { roughness: 0.65 }),
+    flower2: stdMat(pal.flower2, { roughness: 0.65 }),
+  } : null;
+
+  function buildVoxelChunk(cx, cz) {
+    const chunk = { group: new THREE.Group(), boxes: [] };
+    scene.add(chunk.group);
+    const originX = cx * CHUNK;
+    const originZ = cz * CHUNK;
+    const lists = {
+      grass: [], grass2: [], stone: [], stone2: [], trunk: [], leaf: [], leaf2: [],
+      water: [], wood: [], cloud: [], tuft: [], flower: [], flower2: [],
+      wedge: [], ridge: [], pyramid: [], mound: [], cone: [], cylinder: [],
+    };
+    const push = (list, x, y, z, sx = 1, sy = 1, sz = 1, ry = 0) => {
+      list.push(sx, sy, sz, x, y, z, ry);
+    };
+    const x0 = Math.floor(originX / PARK_STEP) - 1;
+    const x1 = Math.ceil((originX + CHUNK) / PARK_STEP) + 1;
+    const z0 = Math.floor(originZ / PARK_STEP) - 1;
+    const z1 = Math.ceil((originZ + CHUNK) / PARK_STEP) + 1;
+    for (let ix = x0; ix <= x1; ix += 1) {
+      for (let iz = z0; iz <= z1; iz += 1) {
+        const x = ix * PARK_STEP;
+        const z = iz * PARK_STEP;
+        if (Math.floor(x / CHUNK) !== cx || Math.floor(z / CHUNK) !== cz) continue;
+        const cell = biomeCell(biome, ix, iz);
+        const steps = cell.steps;
+        const top = steps * PARK_STEP;
+        const neighborDrop = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+          .reduce((max, [dx, dz]) => Math.max(max, Math.abs(steps - biomeSteps(biome, ix + dx, iz + dz))), 0);
+        const groundKind = cell.kind !== 'wood' && cell.kind !== 'liquid';
+        const hill = groundKind && cell.shaped !== false && neighborDrop > 0;
+        if (cell.kind === 'wood') {
+          push(lists.wood, x, top - PARK_STEP * 0.22, z, 0.98, 0.42, 0.98);
+          push(lists.wood, x, top - PARK_STEP * 0.7, z, 0.72, 0.28, 0.72);
+        } else if (cell.kind === 'liquid') {
+          push(lists.water, x, top - PARK_STEP * 0.28, z, 1.04, 0.55, 1.04);
+          const depth = Math.max(2, steps + 1);
+          for (let k = 1; k <= depth; k += 1) {
+            push(lists.stone2, x, top - (k + 0.35) * PARK_STEP, z);
+          }
+        } else if (hill) {
+          const height = (steps + 2) * PARK_STEP;
+          const kind = hillKind(ix, iz);
+          const spread = kind === 'wedge' || kind === 'ridge' || kind === 'pyramid' ? 1 : 1.25;
+          push(lists[kind], x, top - height / 2, z, spread, height / FILL, spread, hillYaw(ix, iz));
+        } else {
+          push(lists.grass, x, top - PARK_STEP * 0.5, z);
+          const depth = steps + 2;
+          for (let k = 1; k <= depth; k += 1) {
+            const stone = (ix + k + iz) % 3 === 0 ? lists.stone2 : lists.stone;
+            push(stone, x, top - (k + 0.5) * PARK_STEP, z);
+          }
+        }
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dz]) => {
+          const n = biomeCell(biome, ix + dx, iz + dz);
+          const drop = steps - n.steps;
+          if (drop >= 2 && cell.kind !== 'wood' && cell.kind !== 'liquid' && biomeFalls(biome, ix, iz, dx, dz)) {
+            for (let k = 1; k <= drop; k += 1) {
+              push(
+                lists.water,
+                x + dx * PARK_STEP * 0.46,
+                top - (k - 0.35) * PARK_STEP,
+                z + dz * PARK_STEP * 0.46,
+                1.05,
+                1.05,
+                1.05,
+              );
+            }
+            push(lists.water, x + dx * PARK_STEP, n.steps * PARK_STEP + PARK_STEP * 0.15, z + dz * PARK_STEP, 0.95, 0.32, 0.95);
+          }
+          if (cell.kind === 'wood' && n.kind !== 'wood') {
+            push(lists.wood, x + dx * PARK_STEP * 0.42, top + PARK_STEP * 0.55, z + dz * PARK_STEP * 0.42, 0.18, 1.15, 0.18);
+            push(lists.wood, x + dx * PARK_STEP * 0.42, top + PARK_STEP * 0.15, z + dz * PARK_STEP * 0.42, dx ? 0.12 : 0.85, 0.12, dz ? 0.12 : 0.85);
+            push(lists.wood, x + dx * PARK_STEP * 0.42, top + PARK_STEP * 0.85, z + dz * PARK_STEP * 0.42, dx ? 0.12 : 0.85, 0.12, dz ? 0.12 : 0.85);
+          }
+        });
+        const h = cellHash(ix, iz);
+        const flat = biomeSteps(biome, ix + 1, iz) === steps && biomeSteps(biome, ix, iz + 1) === steps;
+        const iconTree = biome === 'park'
+          ? (ix === -10 && iz === -22) || (ix === 28 && iz === -20) || (ix === 27 && iz === -28) || (ix === 6 && iz === 4)
+          : (ix === -8 && iz === 2) || (ix === 12 && iz === 2) || (ix === 7 && iz === -2);
+        const showcaseOpen = ix >= -2 && ix <= 8 && iz >= -2 && iz <= 10;
+        const plant = cell.kind === 'grass' || cell.kind === 'snow' || cell.kind === 'rock' || cell.kind === 'metal';
+        if (plant && (iconTree || (flat && h < 0.02 && steps > 0 && !showcaseOpen))) {
+          push(lists.trunk, x, top + PARK_STEP * 0.5, z, 0.55, 1, 0.55);
+          push(lists.trunk, x, top + PARK_STEP * 1.5, z, 0.5, 1, 0.5);
+          const leafY = top + PARK_STEP * 2.35;
+          [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0], [1, 0, 1], [-1, 0, -1]].forEach(([ox, oy, oz], i) => {
+            const bucket = i % 2 === 0 ? lists.leaf : lists.leaf2;
+            push(bucket, x + ox * PARK_STEP * 0.82, leafY + oy * PARK_STEP * 0.82, z + oz * PARK_STEP * 0.82, 0.92, 0.92, 0.92);
+          });
+          addBox(chunk, { minX: x - 0.38, maxX: x + 0.38, minZ: z - 0.38, maxZ: z + 0.38 });
+        } else if (plant && h > 0.62 && h < 0.7) {
+          push(lists.tuft, x + 0.28, top + 0.08, z - 0.18, 0.16, 0.28, 0.16);
+          push(lists.tuft, x - 0.22, top + 0.05, z + 0.24, 0.14, 0.22, 0.14);
+        } else if (plant && h > 0.84 && h < 0.9) {
+          push(h > 0.87 ? lists.flower2 : lists.flower, x + 0.22, top + 0.16, z + 0.16, 0.22, 0.22, 0.22);
+        }
+      }
+    }
+    const home = cx === 0 && cz === 0;
+    const fx = home ? -1 : originX + 8 + cellHash(cx, cz) * 22;
+    const fz = home ? -6 : originZ + 8 + cellHash(cz, cx + 4) * 22;
+    const fy = home ? 14 : 28 + cellHash(cx + 2, cz + 5) * 8;
+    for (let a = -2; a <= 2; a += 1) {
+      for (let b = -2; b <= 2; b += 1) {
+        if (Math.abs(a) + Math.abs(b) > 3) continue;
+        push(lists.grass, fx + a * PARK_STEP, fy, fz + b * PARK_STEP);
+        push(lists.stone, fx + a * PARK_STEP, fy - PARK_STEP, fz + b * PARK_STEP);
+        if (Math.abs(a) === 2 || Math.abs(b) === 2) {
+          push(lists.stone2, fx + a * PARK_STEP, fy - PARK_STEP * 2, fz + b * PARK_STEP);
+        }
+      }
+    }
+    push(lists.trunk, fx, fy + PARK_STEP, fz, 0.5, 1, 0.5);
+    push(lists.leaf, fx, fy + PARK_STEP * 2, fz);
+    push(lists.leaf2, fx + PARK_STEP * 0.7, fy + PARK_STEP * 1.7, fz);
+    push(lists.leaf, fx - PARK_STEP * 0.55, fy + PARK_STEP * 1.85, fz + PARK_STEP * 0.4);
+    for (let k = 1; k <= 14; k += 1) {
+      push(lists.water, fx + PARK_STEP * 2.1, fy - (k - 0.2) * PARK_STEP, fz, 0.7, 1, 0.7);
+    }
+    if (home) {
+      const ix2 = 16;
+      const iz2 = -2;
+      const iy = 20;
+      for (let a = -1; a <= 1; a += 1) {
+        for (let b = -1; b <= 1; b += 1) {
+          push(lists.grass, ix2 + a * PARK_STEP, iy, iz2 + b * PARK_STEP);
+          push(lists.stone, ix2 + a * PARK_STEP, iy - PARK_STEP, iz2 + b * PARK_STEP);
+        }
+      }
+      push(lists.leaf, ix2, iy + PARK_STEP, iz2);
+    }
+    for (let i = 0; i < 4; i += 1) {
+      const cxw = originX + 4 + cellHash(cx + i * 3, cz) * (CHUNK - 8);
+      const czw = originZ + 4 + cellHash(cx, cz + i * 5) * (CHUNK - 8);
+      const cy = 16 + cellHash(i + 2, cx + cz) * 14;
+      const s = 1.8 + cellHash(i + 7, cz) * 1.8;
+      push(lists.cloud, cxw, cy, czw, s, s * 0.62, s * 0.85);
+      push(lists.cloud, cxw + s * 0.7, cy + 0.35, czw + 0.4, s * 0.7, s * 0.5, s * 0.6);
+    }
+    const center = new THREE.Vector3(originX + CHUNK / 2, 8, originZ + CHUNK / 2);
+    Object.keys(lists).forEach((key) => {
+      const data = lists[key];
+      const stride = 7;
+      const count = data.length / stride;
+      if (!count) return;
+      const mesh = new THREE.InstancedMesh(HILL_GEOS[key] || voxelGeo, HILL_GEOS[key] ? voxelMats.grass : voxelMats[key], count);
+      mesh.castShadow = key === 'grass' || key === 'grass2' || key === 'trunk' || key === 'leaf' || key === 'leaf2' || key === 'wood' || Boolean(HILL_GEOS[key]);
+      mesh.receiveShadow = key !== 'cloud';
+      mesh.frustumCulled = true;
+      for (let i = 0; i < count; i += 1) {
+        const o = i * stride;
+        dummy.position.set(data[o + 3], data[o + 4], data[o + 5]);
+        dummy.scale.set(data[o], data[o + 1], data[o + 2]);
+        dummy.rotation.set(0, data[o + 6] || 0, 0);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.boundingSphere = new THREE.Sphere(center, CHUNK * 1.35);
+      chunk.group.add(mesh);
+    });
+    return chunk;
+  }
+
   function buildChunk(cx, cz) {
+    if (theme.kind === 'voxel') return buildVoxelChunk(cx, cz);
     const rng = makeRng((Math.imul(cx, 374761393) ^ Math.imul(cz, 668265263) ^ (themeId.length * 97)) >>> 0);
     const originX = cx * CHUNK;
     const originZ = cz * CHUNK;
@@ -767,7 +1265,7 @@ export function createOpenWorld(scene, themeId, colliders) {
     }
     chunk.group.traverse((obj) => {
       if (!obj.isMesh || !obj.geometry) return;
-      if (obj.geometry === bladeGeo || obj.geometry === leafGeo || obj.geometry === trunkGeo || obj.geometry === wheelGeo) {
+      if (obj.geometry.userData?.shared) {
         if (obj.isInstancedMesh) obj.dispose();
         return;
       }
@@ -825,7 +1323,7 @@ export function createOpenWorld(scene, themeId, colliders) {
 
       const gx = Math.round(px / tile) * tile;
       const gz = Math.round(pz / tile) * tile;
-      ground.position.set(gx, -0.04, gz);
+      ground.position.set(gx, voxel ? -3.55 : -0.04, gz);
       if (floorTex) {
         const repeat = 900 / tileSize;
         floorTex.offset.set(gx / tileSize - repeat * 0.5, -gz / tileSize + repeat * 0.5);

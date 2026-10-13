@@ -6,7 +6,8 @@ import { createEnemy, updateEnemy, hurtEnemy } from './enemies.js';
 import { createBoss, updateBoss, hurtBoss, createCrumbShot } from './boss.js';
 import { createEffects } from './effects.js';
 import { createCoinMesh, createPowerMesh, updateCoin, spinPickup, POWER_INFO } from './pickups.js';
-import { resolveCircle, findClearPoint, segmentHits } from './collision.js';
+import { climbStep, findClearPoint, resolveCircle, segmentHits } from './collision.js';
+import { PARK_STEP } from './openworld.js';
 import { getRunStats, getActivePower } from './save.js';
 import { readMove, shiftDown } from './input.js';
 import { clamp, formatTime, lerpAngle, yawFromDir, forwardFromYaw } from './util.js';
@@ -100,7 +101,7 @@ export function createGame(hooks) {
     camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.12, 1200);
     effects = createEffects(world.scene);
     player = createToastActor(saveSnap.selectedSkin, { angry: false });
-    player.group.position.set(world.spawn.x, 0, world.spawn.z);
+    player.group.position.set(world.spawn.x, world.heightAt ? world.heightAt(world.spawn.x, world.spawn.z) : 0, world.spawn.z);
     player.group.rotation.y = world.spawn.yaw || 0;
     world.scene.add(player.group);
     orbit = createOrbitRig();
@@ -130,7 +131,8 @@ export function createGame(hooks) {
     buffs.shield = 0;
     coins = world.coins.map((spot) => {
       const mesh = createCoinMesh();
-      mesh.position.set(spot.x, mesh.userData.baseY, spot.z);
+      const gy = world.heightAt ? world.heightAt(spot.x, spot.z) : 0;
+      mesh.position.set(spot.x, gy + mesh.userData.baseY, spot.z);
       world.scene.add(mesh);
       return { mesh, x: spot.x, z: spot.z, got: false };
     });
@@ -170,7 +172,8 @@ export function createGame(hooks) {
     }
     if (!spot) return;
     const mesh = createPowerMesh(type);
-    mesh.position.set(spot.x, mesh.userData.baseY, spot.z);
+    const gy = world.heightAt ? world.heightAt(spot.x, spot.z) : 0;
+    mesh.position.set(spot.x, gy + mesh.userData.baseY, spot.z);
     world.scene.add(mesh);
     powers.push({ mesh, x: spot.x, z: spot.z, type, got: false });
   }
@@ -221,6 +224,7 @@ export function createGame(hooks) {
   }
 
   let shiftHeld = false;
+  let burnGlow = 0;
   let blockFx = 0;
   let knockX = 0;
   let knockZ = 0;
@@ -232,12 +236,9 @@ export function createGame(hooks) {
     sfx.kick();
     const px = player.group.position.x;
     const pz = player.group.position.z;
-    forwardFromYaw(player.group.rotation.y, forward);
-    const hx = px + forward.x * 0.95;
-    const hz = pz + forward.z * 0.95;
     enemies.forEach((enemy) => {
       if (enemy.dead || enemy.dying > 0) return;
-      if (Math.hypot(enemy.x - hx, enemy.z - hz) < 1.05) {
+      if (Math.hypot(enemy.x - px, enemy.z - pz) < 2.6 && inFront(enemy.x, enemy.z, 2.6, -0.2)) {
         hurtEnemy(enemy, 8, px, pz);
         effects.burst({ x: enemy.x, y: 1, z: enemy.z }, '#ffe1b0', 8, 2);
         sfx.hit();
@@ -245,7 +246,7 @@ export function createGame(hooks) {
       }
     });
     if (boss && !boss.dead && boss.mode !== 'enter') {
-      if (Math.hypot(boss.x - hx, boss.z - hz) < boss.radius + 0.7) {
+      if (Math.hypot(boss.x - px, boss.z - pz) < (boss.radius || 1.2) + 1.5) {
         if (hurtBoss(boss, 8, px, pz)) {
           sfx.hit();
           effects.burst({ x: boss.x, y: 1.4, z: boss.z }, '#ffd0a8', 10, 2);
@@ -327,7 +328,8 @@ export function createGame(hooks) {
     const pz = player.group.position.z;
     enemies.forEach((enemy) => {
       if (enemy.dead || enemy.dying > 0) return;
-      if ((enemy.burnHit || 0) > 0 || !inFront(enemy.x, enemy.z, 3.5, 0.45)) return;
+      const near = Math.hypot(enemy.x - px, enemy.z - pz) < 2.4;
+      if ((enemy.burnHit || 0) > 0 || !(near || inFront(enemy.x, enemy.z, 5.2, 0.05))) return;
       enemy.burnHit = 0.55;
       if (hurtEnemy(enemy, 8, px, pz, true)) {
         enemy.knockX *= 0.2;
@@ -335,7 +337,7 @@ export function createGame(hooks) {
         effects.burst({ x: enemy.x, y: 1, z: enemy.z }, '#ff7a2a', 8, 2.2);
       }
     });
-    if (boss && !boss.dead && (boss.burnHit || 0) <= 0 && inFront(boss.x, boss.z, 4.2, 0.35)) {
+    if (boss && !boss.dead && (boss.burnHit || 0) <= 0 && inFront(boss.x, boss.z, 5.5, 0.0)) {
       boss.burnHit = 0.55;
       if (hurtBoss(boss, 14, px, pz, true)) effects.burst({ x: boss.x, y: 1.4, z: boss.z }, '#ff7a2a', 10, 2.4);
     }
@@ -347,12 +349,7 @@ export function createGame(hooks) {
     const pos = player.group.position;
     const step = 3.5 / 6;
     for (let i = 0; i < 6; i += 1) {
-      pos.x += forward.x * step;
-      pos.z += forward.z * step;
-      const body = { x: pos.x, z: pos.z };
-      resolveCircle(body, 0.46, world.colliders);
-      pos.x = body.x;
-      pos.z = body.z;
+      climbStep(pos, pos.x + forward.x * step, pos.z + forward.z * step, 0.46, world.colliders, world.heightAt, PARK_STEP, 1);
       enemies.forEach((enemy) => {
         if (enemy.dead || enemy.dying > 0 || enemy.dashHit) return;
         if (Math.hypot(enemy.x - pos.x, enemy.z - pos.z) < 1.15) {
@@ -384,6 +381,16 @@ export function createGame(hooks) {
         sfx.power();
       }
       scorch();
+      burnGlow -= dt;
+      if (burnGlow <= 0) {
+        burnGlow = 0.1;
+        forwardFromYaw(player.group.rotation.y, forward);
+        effects.burst({
+          x: player.group.position.x + forward.x * 1.4,
+          y: player.group.position.y + 0.85,
+          z: player.group.position.z + forward.z * 1.4,
+        }, '#ff6a1a', 5, 1.6);
+      }
     }
     if (powerId === 'freeze' && shiftHeld && !powerWasHeld) {
       effects.floater(player.group.position, 'FREEZE', '#c8f4ff');
@@ -427,6 +434,7 @@ export function createGame(hooks) {
           playerZ: player.group.position.z,
           frozen: powerId === 'freeze' && shiftHeld && Math.hypot(player.group.position.x - boss.x, player.group.position.z - boss.z) < 6.5,
           colliders: world.colliders,
+          heightAt: world.heightAt,
           time: elapsed,
           onAttack: (amount, source) => damagePlayer(amount, source.x, source.z),
           onTouch: (amount, source) => damagePlayer(amount, source.x, source.z),
@@ -506,18 +514,22 @@ export function createGame(hooks) {
     knockX *= Math.max(0, 1 - dt * 7);
     knockZ *= Math.max(0, 1 - dt * 7);
     const pos = player.group.position;
-    pos.x += mx * speed * dt + knockX * dt;
-    pos.z += mz * speed * dt + knockZ * dt;
-    const body = { x: pos.x, z: pos.z };
-    resolveCircle(body, 0.46, world.colliders);
-    pos.x = body.x;
-    pos.z = body.z;
+    climbStep(
+      pos,
+      pos.x + mx * speed * dt + knockX * dt,
+      pos.z + mz * speed * dt + knockZ * dt,
+      0.46,
+      world.colliders,
+      world.heightAt,
+      PARK_STEP,
+      dt,
+    );
     const moving = len > 0.1;
     if (moving) {
       const desired = yawFromDir(mx, mz);
       const next = lerpAngle(player.group.rotation.y, desired, 1 - Math.exp(-12 * dt));
       player.group.rotation.y = Math.atan2(Math.sin(next), Math.cos(next));
-      if (Math.random() < dt * 8) effects.glowPuff({ x: pos.x, y: 0.15, z: pos.z }, '#f3e2c4', 0.35);
+      if (Math.random() < dt * 8) effects.glowPuff({ x: pos.x, y: pos.y + 0.15, z: pos.z }, '#f3e2c4', 0.35);
     }
     player.setMoving(moving);
     invuln = Math.max(0, invuln - dt);
@@ -536,6 +548,8 @@ export function createGame(hooks) {
     coins.forEach((coin) => {
       if (coin.got) return;
       updateCoin(coin.mesh, elapsed);
+      const gy = world.heightAt ? world.heightAt(coin.x, coin.z) : 0;
+      coin.mesh.position.y = gy + coin.mesh.userData.baseY;
       const dist = Math.hypot(coin.x - px, coin.z - pz);
       if (stats.magnet > 0 && dist < stats.magnet && dist > 0.2) {
         const pull = (stats.magnet - dist) * dt * 2.2;
@@ -549,6 +563,8 @@ export function createGame(hooks) {
     powers.forEach((power) => {
       if (power.got) return;
       spinPickup(power.mesh, elapsed, 2.2);
+      const gy = world.heightAt ? world.heightAt(power.x, power.z) : 0;
+      power.mesh.position.y = gy + power.mesh.userData.baseY;
       if (Math.hypot(power.x - px, power.z - pz) < 1) {
         power.got = true;
         world.scene.remove(power.mesh);
@@ -591,6 +607,7 @@ export function createGame(hooks) {
         colliders: world.colliders,
         bounds: world.bounds,
         frozen: powerId === 'freeze' && shiftHeld && Math.hypot(enemy.x - px, enemy.z - pz) < 4.6,
+        heightAt: world.heightAt,
         onAttack: (source, amount) => damagePlayer(amount, source.x, source.z),
       });
       awardEnemy(enemy);
@@ -619,7 +636,7 @@ export function createGame(hooks) {
             enemy.actor.group.visible = true;
             enemy.actor.group.scale.setScalar(1);
             enemy.actor.group.rotation.z = 0;
-            enemy.actor.group.position.set(spot.x, 0, spot.z);
+            enemy.actor.group.position.set(spot.x, world.heightAt ? world.heightAt(spot.x, spot.z) : 0, spot.z);
             enemy.actor.setHealth(enemy.hp, enemy.maxHp);
             enemy.actor.setChill(false, 10);
           } else {
@@ -658,6 +675,7 @@ export function createGame(hooks) {
       a.z = slot.z;
       a.actor.group.position.x = a.x;
       a.actor.group.position.z = a.z;
+      if (world.heightAt) a.actor.group.position.y = world.heightAt(a.x, a.z);
     }
     if (powerId === 'block' && shiftHeld) {
       enemies.forEach((enemy) => {
@@ -721,7 +739,7 @@ export function createGame(hooks) {
       player.setBodyVisible(false);
       player.setBlockShown(false);
       const bob = player.anim.moving ? Math.abs(Math.sin(elapsed * 8.2)) * 0.028 : 0;
-      head.set(pos.x, 1.38 + bob, pos.z);
+      head.set(pos.x, pos.y + 1.5 + bob, pos.z);
       camera.position.copy(head);
       camera.rotation.order = 'YXZ';
       camera.rotation.y = fpsYaw + Math.PI;
@@ -750,9 +768,9 @@ export function createGame(hooks) {
     if (segmentHits(pos.x, pos.z, cx, cz, world.colliders)) dist = 5.6;
     cx = pos.x - forward.x * dist + rx * 2.5;
     cz = pos.z - forward.z * dist + rz * 2.5;
-    camTarget.set(cx + (Math.random() - 0.5) * shake, height + (Math.random() - 0.5) * shake, cz + (Math.random() - 0.5) * shake);
+    camTarget.set(cx + (Math.random() - 0.5) * shake, pos.y + height + (Math.random() - 0.5) * shake, cz + (Math.random() - 0.5) * shake);
     camera.position.lerp(camTarget, 1 - Math.exp(-5.5 * dt));
-    lookAt.set(pos.x + forward.x * 1.2, 1.05, pos.z + forward.z * 1.2);
+    lookAt.set(pos.x + forward.x * 1.2, pos.y + 1.15, pos.z + forward.z * 1.2);
     camera.lookAt(lookAt);
   }
 
