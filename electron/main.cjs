@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, nativeImage, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 app.setName('Toast Time');
 
@@ -67,10 +68,17 @@ function installMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+async function startOnlineLevels() {
+  const serverUrl = pathToFileURL(path.join(app.getAppPath(), 'server', 'online.mjs')).href;
+  const { listenOnline } = await import(serverUrl);
+  await listenOnline(8787);
+}
+
 app.whenReady().then(() => {
   const iconPath = path.join(process.resourcesPath, 'icon.icns');
   if (app.dock && fs.existsSync(iconPath)) app.dock.setIcon(nativeImage.createFromPath(iconPath));
   installMenu();
+  startOnlineLevels().catch((err) => console.error('Online levels did not start', err));
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

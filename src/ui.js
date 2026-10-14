@@ -22,8 +22,33 @@ function powerLine(skin) {
   return `SPECIAL POWER<br>${skin.cost} COINS<br>${how}<br>${skin.power.detail}`;
 }
 
+function onlineCards(levels, query) {
+  const q = String(query || '').trim().toLowerCase();
+  const shown = (levels || []).filter((world) => {
+    if (!q) return true;
+    const name = String(world.name || '').toLowerCase();
+    const author = String(world.author || '').toLowerCase();
+    return name.includes(q) || author.includes(q);
+  });
+  if (!shown.length) {
+    const empty = q ? 'No worlds match that search.' : 'No online levels yet. Publish one from the editor.';
+    return `<p class="lede">${empty}</p>`;
+  }
+  return shown.map((world) => {
+    const floor = FLOORS.find((item) => item.id === world.floor);
+    return `
+      <article class="card online-card">
+        <h3>${escapeHtml(world.name)}</h3>
+        <p>${floor ? floor.name : 'TOASTY GRASS'}<br>${world.coins.length} COINS · ${world.enemies.length} ENEMIES</p>
+        <button class="game-btn wide" type="button" data-act="play-online" data-id="${escapeHtml(world.id)}">PLAY</button>
+        <p class="byline">by ${escapeHtml(world.author || 'Toasto')}</p>
+      </article>`;
+  }).join('');
+}
+
 export function createUI(root, api) {
   let hud = null;
+  let listedLevels = [];
 
   root.addEventListener('click', (event) => {
     const button = event.target.closest('[data-act]');
@@ -35,6 +60,11 @@ export function createUI(root, api) {
 
   root.addEventListener('input', (event) => {
     if (event.target.id === 'username') api.onUsernameInput(event.target.value);
+    if (event.target.id === 'online-search') {
+      api.onOnlineSearch(event.target.value);
+      const grid = root.querySelector('#online-grid');
+      if (grid) grid.innerHTML = onlineCards(listedLevels, event.target.value);
+    }
   });
 
   root.addEventListener('focusout', (event) => {
@@ -43,6 +73,7 @@ export function createUI(root, api) {
 
   function show(screen, data = {}) {
     hud = null;
+    if (screen === 'onlineLevels' && Array.isArray(data.levels)) listedLevels = data.levels;
     root.innerHTML = templates[screen] ? templates[screen](data) : '';
     hud = grabHud();
   }
@@ -160,6 +191,7 @@ const templates = {
             <button class="game-btn alt" type="button" data-act="minigames">⚽ MINIGAMES</button>
             <button class="game-btn alt" type="button" data-act="editor">🛠️ EDIT WORLD</button>
             <button class="game-btn alt" type="button" data-act="saved-worlds">🌍 SAVED WORLDS</button>
+            <button class="game-btn alt" type="button" data-act="online">🌐 ONLINE LEVELS</button>
             <button class="game-btn party" type="button" data-act="party">🎉 PARTY</button>
             <button class="game-btn alt" type="button" data-act="settings">⚙️ SETTINGS</button>
           </div>
@@ -379,6 +411,26 @@ const templates = {
       : '<p class="lede">No saved worlds yet. Edit a world and press SAVE.</p>';
     return shell('SAVED WORLDS', 'Play any world you saved from the editor.', `<div class="grid">${cards}</div>`);
   },
+  onlineLevels(data = {}) {
+    const notice = data.notice
+      ? `<p class="publish-notice">(${escapeHtml(data.notice)}) is now published!</p>`
+      : '';
+    let body = '<p class="lede">Loading worlds...</p>';
+    if (data.status === 'error') {
+      body = `<p class="lede">${escapeHtml(data.message || 'Could not reach online levels.')}</p><button class="game-btn wide" type="button" data-act="online">TRY AGAIN</button>`;
+    } else if (data.status === 'ready') {
+      body = `<div class="grid" id="online-grid">${onlineCards(data.levels || [], data.query || '')}</div>`;
+    }
+    const lede = notice ? '' : 'Play worlds made by people around the world.';
+    const follow = notice ? '<p class="lede">Play worlds made by people around the world.</p>' : '';
+    return shell('ONLINE LEVELS', lede, `
+      ${notice}
+      ${follow}
+      <label class="field">SEARCH WORLDS
+        <input id="online-search" maxlength="24" value="${escapeHtml(data.query || '')}" placeholder="Name or player" />
+      </label>
+      ${body}`);
+  },
   editor(data = {}) {
     const dialog = data.confirm ? `
       <div class="modal-back">
@@ -407,6 +459,7 @@ const templates = {
           <button class="game-btn alt" type="button" data-act="remove-last">REMOVE LAST</button>
           <button class="game-btn good" type="button" data-act="save-world">SAVE</button>
           <button class="game-btn good" type="button" data-act="save-play">SAVE & PLAY</button>
+          <button class="game-btn" type="button" data-act="publish-world">PUBLISH</button>
           <button class="game-btn danger" type="button" data-act="exit-editor">EXIT</button>
         </div>
         <p id="editor-counts">Coins 0 · Enemies 0</p>

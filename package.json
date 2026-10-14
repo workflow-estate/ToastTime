@@ -6,6 +6,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
+    "online": "node server/online.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "android:sync": "vite build && cap sync android",
@@ -22,6 +23,7 @@
     },
     "files": [
       "electron/**/*",
+      "server/**/*.mjs",
       "dist/**/*",
       "package.json"
     ],

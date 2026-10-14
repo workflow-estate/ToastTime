@@ -54,6 +54,34 @@ export function stopBossMusic() {
   if (unlocked) startTheme();
 }
 
+export function playStudioSting() {
+  const audio = context();
+  if (!audio) return;
+  const run = () => {
+    [196, 247, 294, 392].forEach((freq, i) => {
+      toneRaw(audio, { freq, dur: 1.15, type: 'sine', gain: 0.07, slide: 30, delay: i * 0.08 });
+    });
+    toneRaw(audio, { freq: 523, dur: 1.4, type: 'triangle', gain: 0.05, slide: 40, delay: 0.28 });
+  };
+  if (audio.state === 'suspended') audio.resume().then(run).catch(() => {});
+  else run();
+}
+
+function toneRaw(audio, { freq = 440, dur = 0.12, type = 'sine', gain = 0.3, slide = 0, delay = 0 }) {
+  const t = audio.currentTime + delay;
+  const osc = audio.createOscillator();
+  const amp = audio.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t + dur);
+  amp.gain.setValueAtTime(gain, t);
+  amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(amp);
+  amp.connect(master);
+  osc.start(t);
+  osc.stop(t + dur + 0.02);
+}
+
 export function unlockAudio() {
   const audio = context();
   if (audio && audio.state === 'suspended') audio.resume();

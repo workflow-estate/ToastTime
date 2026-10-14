@@ -8,7 +8,7 @@ import { createGame } from './game.js';
 import { createSoccer } from './soccer.js';
 import { createParty } from './party.js';
 import { createEditor } from './editor.js';
-import { unlockAudio, sfx, stopBossMusic } from './audio.js';
+import { unlockAudio, playStudioSting, sfx, stopBossMusic } from './audio.js';
 import {
   loadSave,
   getSave,
@@ -26,6 +26,10 @@ import {
   resetProgress,
   sanitizeUsername,
 } from './save.js';
+import {
+  fetchLevels,
+  publishLevel,
+} from './online.js';
 
 loadSave();
 
@@ -59,6 +63,8 @@ let partyArena = 'colosseum';
 let runKind = 'campaign';
 let shopNote = '';
 let raf = 0;
+let onlineCache = [];
+let onlineQuery = '';
 
 const preview = createPreview();
 const game = createGame({
@@ -145,6 +151,26 @@ const ui = createUI(uiRoot, {
       return showPreview('editorFloors');
     }
     if (act === 'saved-worlds') return showPreview('savedWorlds');
+    if (act === 'online') {
+      onlineQuery = '';
+      void openOnline();
+      return;
+    }
+    if (act === 'play-online') {
+      const found = onlineCache.find((world) => world.id === id);
+      if (!found) {
+        void openOnline();
+        return;
+      }
+      queuedWorld = found;
+      beginRun('custom');
+      return;
+    }
+    if (act === 'publish-world') {
+      worldName();
+      void publishCurrent();
+      return;
+    }
     if (act === 'select-map') {
       setSelectedMap(id);
       ui.show('maps');
@@ -266,6 +292,9 @@ const ui = createUI(uiRoot, {
     const field = uiRoot.querySelector('#username');
     if (field) field.value = getSave().username;
   },
+  onOnlineSearch(value) {
+    onlineQuery = String(value || '').slice(0, 24);
+  },
 });
 
 function worldName() {
@@ -280,6 +309,48 @@ function storeDraft() {
   editor.noteSaved(saved.id);
   draftName = saved.name;
   return saved;
+}
+
+async function openOnline(notice = '') {
+  leavePointer();
+  active = preview;
+  preview.setSplit(false);
+  screen = 'onlineLevels';
+  ui.show('onlineLevels', { status: 'loading', query: onlineQuery, notice });
+  try {
+    onlineCache = await fetchLevels();
+    if (screen !== 'onlineLevels') return;
+    ui.show('onlineLevels', {
+      status: 'ready',
+      levels: onlineCache,
+      query: onlineQuery,
+      notice,
+    });
+  } catch (err) {
+    if (screen !== 'onlineLevels') return;
+    ui.show('onlineLevels', {
+      status: 'error',
+      query: onlineQuery,
+      notice,
+      message: err.message || 'Could not reach online levels.',
+    });
+  }
+}
+
+async function publishCurrent() {
+  const saved = storeDraft();
+  const snap = saved || { ...editor.snapshot(), name: worldName() };
+  const notice = (saved && saved.name) || snap.name || draftName || 'MY WORLD';
+  try {
+    await publishLevel({ ...snap, name: notice, author: getSave().username });
+    editorLive = false;
+    onlineQuery = '';
+    await openOnline(notice);
+    editor.dispose();
+  } catch (err) {
+    screen = 'editor';
+    ui.show('editor', { message: err.message || 'COULD NOT PUBLISH', name: draftName });
+  }
 }
 
 function goMenu() {
@@ -364,6 +435,23 @@ function frame(now) {
 showPreview('menu');
 raf = requestAnimationFrame(frame);
 bootNative();
+playStudioIntro();
+
+function playStudioIntro() {
+  const intro = document.getElementById('studio-intro');
+  if (!intro) return;
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    intro.classList.add('out');
+    window.setTimeout(() => intro.remove(), 720);
+  };
+  requestAnimationFrame(() => intro.classList.add('show'));
+  playStudioSting();
+  intro.addEventListener('pointerdown', finish);
+  window.setTimeout(finish, 3400);
+}
 
 function bootNative() {
   if (!Capacitor.isNativePlatform()) return;
